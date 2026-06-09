@@ -6,6 +6,7 @@ import {
   isJsonContentType,
   isUnsafeResolvedUrl,
   loadSubnets,
+  readJson,
   repoRoot,
   stableStringify,
   writeJson,
@@ -17,6 +18,25 @@ const dryRun = args.has("--dry-run") || !shouldWrite;
 const generatedAt = buildTimestamp();
 const contractVersion = "2026-06-06.1";
 const outputRoot = path.join(repoRoot, "registry/adapters/latest");
+// GitHub token plumbing: accept either env name (the project convention used by
+// discover-candidates and the CI workflows) and ignore accidental whitespace.
+const githubToken = (
+  process.env.GITHUB_TOKEN ||
+  process.env.GH_TOKEN ||
+  ""
+).trim();
+// When set, an authenticated run that GitHub rejects (401) is a hard failure
+// instead of silently degrading published adapter data. Targeted at the
+// invalid/expired-token case; a deliberately tokenless run is never failed.
+const requireAdapterAuth = process.env.METAGRAPH_REQUIRE_ADAPTER_AUTH === "1";
+
+async function loadPreviousAdapterSnapshot(slug) {
+  try {
+    return await readJson(path.join(outputRoot, `${slug}.json`));
+  } catch {
+    return null;
+  }
+}
 const OPENAPI_METHODS = new Set([
   "delete",
   "get",
@@ -119,6 +139,7 @@ async function snapshotGittensor() {
     },
   };
 
+  const previous = await loadPreviousAdapterSnapshot("gittensor");
   const repositoryNames = Object.keys(master.body || {}).sort();
   const repoMetadata = [];
   await mapLimit(repositoryNames, 6, async (fullName) => {
@@ -126,7 +147,11 @@ async function snapshotGittensor() {
     repoMetadata.push(metadata);
   });
   repoMetadata.sort((a, b) => a.full_name.localeCompare(b.full_name));
-  dimensions.repository_metadata = summarizeGithubMetadata(repoMetadata);
+  dimensions.repository_metadata = summarizeGithubMetadata(
+    repoMetadata,
+    previous?.dimensions?.repository_metadata || null,
+  );
+  reportAdapterAuth("gittensor", dimensions.repository_metadata);
   dimensions.mirror_freshness = repoMetadata.find(
     (repo) => repo.full_name === "entrius/das-github-mirror",
   ) || {
@@ -698,8 +723,8 @@ async function fetchGithubRepo(fullName) {
     accept: "application/vnd.github+json",
     "user-agent": "metagraphed-adapter-snapshot/0.0",
   };
-  if (process.env.GITHUB_TOKEN) {
-    headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  if (githubToken) {
+    headers.authorization = `Bearer ${githubToken}`;
     headers["x-github-api-version"] = "2022-11-28";
   }
   const started = performance.now();
@@ -712,7 +737,11 @@ async function fetchGithubRepo(fullName) {
     if (!response.ok) {
       return githubHtmlFallback(fullName, {
         status:
-          response.status === 403 ? "rate-limited-or-forbidden" : "failed",
+          response.status === 401
+            ? "unauthorized"
+            : response.status === 403
+              ? "rate-limited-or-forbidden"
+              : "failed",
         full_name: fullName,
         status_code: response.status,
         error: body?.message || `HTTP ${response.status}`,
@@ -774,21 +803,98 @@ async function githubHtmlFallback(fullName, failure) {
   }
 }
 
-function summarizeGithubMetadata(repos) {
-  const captured = repos.filter((repo) => repo.status === "captured");
-  const usable = repos.filter((repo) =>
-    ["captured", "html-fallback"].includes(repo.status),
+export function summarizeGithubMetadata(repos, previousSummary = null) {
+  // Index the previously-published per-repo metadata so a degraded fresh fetch
+  // (bad/missing token, rate limit, transient error) carries forward the last
+  // known-good GitHub API values instead of regressing the published adapter to
+  // null `pushed_at`/`open_issues_count` rows.
+  const previousByName = new Map(
+    (previousSummary?.repositories || [])
+      .filter((repo) => repo && repo.full_name)
+      .map((repo) => [repo.full_name, repo]),
   );
+  const previousAsOf = previousSummary?.captured_at || null;
+
+  const unauthorized = repos.some(
+    (repo) =>
+      repo.status === "unauthorized" || repo.fallback_reason === "unauthorized",
+  );
+  const authStatus = unauthorized
+    ? "unauthorized"
+    : githubToken
+      ? "ok"
+      : "unauthenticated";
+
+  const rows = repos.map((repo) => {
+    if (repo.status === "captured") {
+      return {
+        full_name: repo.full_name,
+        archived: repo.archived ?? null,
+        default_branch: repo.default_branch || null,
+        html_url: repo.html_url || null,
+        metadata_level: "github-api",
+        pushed_at: repo.pushed_at || null,
+        open_issues_count: repo.open_issues_count ?? null,
+        topic_count: repo.topics?.length || 0,
+      };
+    }
+    // Fresh fetch did not capture: carry forward prior github-api data if any.
+    const previous = previousByName.get(repo.full_name);
+    if (previous && previous.metadata_level?.startsWith("github-api")) {
+      return {
+        full_name: repo.full_name,
+        archived: previous.archived ?? null,
+        default_branch: previous.default_branch || null,
+        html_url: repo.html_url || previous.html_url || null,
+        metadata_level: "github-api-cached",
+        metadata_as_of: previous.metadata_as_of || previousAsOf,
+        pushed_at: previous.pushed_at || null,
+        open_issues_count: previous.open_issues_count ?? null,
+        topic_count: previous.topic_count || 0,
+      };
+    }
+    if (repo.status === "html-fallback") {
+      return {
+        full_name: repo.full_name,
+        archived: repo.archived ?? null,
+        default_branch: repo.default_branch || null,
+        html_url: repo.html_url || null,
+        metadata_level: "html-fallback",
+        pushed_at: repo.pushed_at || null,
+        open_issues_count: repo.open_issues_count ?? null,
+        topic_count: repo.topics?.length || 0,
+      };
+    }
+    return null;
+  });
+
+  const repositories = rows.filter(Boolean);
+  const capturedCount = repositories.filter(
+    (repo) => repo.metadata_level === "github-api",
+  ).length;
+  const carriedForwardCount = repositories.filter(
+    (repo) => repo.metadata_level === "github-api-cached",
+  ).length;
+  const usableCount = capturedCount + carriedForwardCount;
+  const withRealMetadata = repositories.filter((repo) =>
+    repo.metadata_level?.startsWith("github-api"),
+  );
+
   return {
-    status: usable.length === 0 && repos.length > 0 ? "degraded" : "captured",
+    // "captured" as long as we are publishing real metadata (fresh or carried
+    // forward); only "degraded" when there is genuinely nothing usable.
+    status: usableCount === 0 && repos.length > 0 ? "degraded" : "captured",
+    auth_status: authStatus,
+    captured_at: new Date().toISOString(),
     repository_count: repos.length,
-    captured_count: captured.length,
-    html_fallback_count: repos.filter((repo) => repo.status === "html-fallback")
-      .length,
-    archived_count: captured.filter((repo) => repo.archived).length,
-    disabled_count: captured.filter((repo) => repo.disabled).length,
+    captured_count: capturedCount,
+    carried_forward_count: carriedForwardCount,
+    html_fallback_count: repositories.filter(
+      (repo) => repo.metadata_level === "html-fallback",
+    ).length,
+    archived_count: withRealMetadata.filter((repo) => repo.archived).length,
     latest_push_at:
-      captured
+      withRealMetadata
         .map((repo) => repo.pushed_at)
         .filter(Boolean)
         .sort()
@@ -796,18 +902,37 @@ function summarizeGithubMetadata(repos) {
     rate_limited_or_forbidden_count: repos.filter(
       (repo) => repo.status === "rate-limited-or-forbidden",
     ).length,
-    repositories: usable.map((repo) => ({
-      full_name: repo.full_name,
-      archived: repo.archived ?? null,
-      default_branch: repo.default_branch || null,
-      html_url: repo.html_url || null,
-      metadata_level:
-        repo.status === "captured" ? "github-api" : "html-fallback",
-      pushed_at: repo.pushed_at || null,
-      open_issues_count: repo.open_issues_count ?? null,
-      topic_count: repo.topics?.length || 0,
-    })),
+    repositories: repositories.sort((a, b) =>
+      a.full_name.localeCompare(b.full_name),
+    ),
   };
+}
+
+function reportAdapterAuth(slug, summary) {
+  if (!summary) {
+    return;
+  }
+  if (summary.auth_status === "unauthorized") {
+    const message =
+      `adapter snapshot for ${slug}: GitHub rejected the configured token ` +
+      `(401 Bad credentials). Published repository metadata was carried ` +
+      `forward from the previous snapshot (${summary.carried_forward_count} ` +
+      `repos) instead of being captured fresh. Fix GITHUB_TOKEN/GH_TOKEN.`;
+    process.stderr.write(`::warning::${message}\n`);
+    if (requireAdapterAuth) {
+      process.stderr.write(
+        `::error::${slug} adapter snapshot requires a valid GitHub token ` +
+          `(METAGRAPH_REQUIRE_ADAPTER_AUTH=1).\n`,
+      );
+      process.exitCode = 1;
+    }
+  } else if (summary.auth_status === "unauthenticated" && shouldWrite) {
+    process.stderr.write(
+      `::warning::adapter snapshot for ${slug}: no GITHUB_TOKEN/GH_TOKEN ` +
+        `configured; GitHub repository metadata may be rate-limited or ` +
+        `carried forward from the previous snapshot.\n`,
+    );
+  }
 }
 
 function adapterStatus(dimensions) {

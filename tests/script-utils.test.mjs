@@ -87,6 +87,7 @@ import {
   validateSubmissionProvenance,
 } from "../scripts/submission-policy.mjs";
 import { submissionFormattingErrors } from "../scripts/submission-formatting.mjs";
+import { summarizeGithubMetadata } from "../scripts/snapshot-adapters.mjs";
 
 const native = {
   subnets: [
@@ -1779,5 +1780,80 @@ describe("submission policy helpers", () => {
     });
     assert.equal(invalid.public_state, "fix_required");
     assert.equal(invalid.candidate, null);
+  });
+});
+
+describe("adapter github metadata carry-forward", () => {
+  const previousSummary = {
+    captured_at: "2026-06-08T12:00:00.000Z",
+    repositories: [
+      {
+        full_name: "entrius/gittensor",
+        archived: false,
+        default_branch: "main",
+        html_url: "https://github.com/entrius/gittensor",
+        metadata_level: "github-api",
+        pushed_at: "2026-06-07T10:00:00.000Z",
+        open_issues_count: 12,
+        topic_count: 3,
+      },
+    ],
+  };
+
+  test("carries forward last-good metadata when a fresh fetch is unauthorized", () => {
+    const summary = summarizeGithubMetadata(
+      [
+        {
+          status: "html-fallback",
+          full_name: "entrius/gittensor",
+          fallback_reason: "unauthorized",
+          html_url: "https://github.com/entrius/gittensor",
+        },
+      ],
+      previousSummary,
+    );
+    assert.equal(summary.auth_status, "unauthorized");
+    assert.equal(summary.status, "captured");
+    assert.equal(summary.captured_count, 0);
+    assert.equal(summary.carried_forward_count, 1);
+    const repo = summary.repositories[0];
+    assert.equal(repo.metadata_level, "github-api-cached");
+    assert.equal(repo.pushed_at, "2026-06-07T10:00:00.000Z");
+    assert.equal(repo.open_issues_count, 12);
+    assert.equal(repo.metadata_as_of, "2026-06-08T12:00:00.000Z");
+  });
+
+  test("prefers a fresh capture over carried-forward data", () => {
+    const summary = summarizeGithubMetadata(
+      [
+        {
+          status: "captured",
+          full_name: "entrius/gittensor",
+          archived: false,
+          default_branch: "main",
+          html_url: "https://github.com/entrius/gittensor",
+          pushed_at: "2026-06-09T09:00:00.000Z",
+          open_issues_count: 4,
+          topics: ["bittensor"],
+        },
+      ],
+      previousSummary,
+    );
+    assert.equal(summary.status, "captured");
+    assert.equal(summary.captured_count, 1);
+    assert.equal(summary.carried_forward_count, 0);
+    assert.equal(summary.repositories[0].metadata_level, "github-api");
+    assert.equal(summary.repositories[0].pushed_at, "2026-06-09T09:00:00.000Z");
+  });
+
+  test("reports degraded only when no usable metadata exists", () => {
+    const summary = summarizeGithubMetadata(
+      [{ status: "failed", full_name: "entrius/gittensor" }],
+      null,
+    );
+    assert.equal(summary.status, "degraded");
+    assert.equal(summary.captured_count, 0);
+    assert.equal(summary.carried_forward_count, 0);
+    assert.equal(summary.repositories.length, 0);
   });
 });

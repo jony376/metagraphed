@@ -42,6 +42,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           METAGRAPH_WRITE_PROBE_RESULTS: "1"
+          # A token is always present here, so a 401 means the token is broken;
+          # fail loudly instead of silently shipping degraded adapter data.
+          METAGRAPH_REQUIRE_ADAPTER_AUTH: "1"
 
       - name: Generate sync summary
         run: |
