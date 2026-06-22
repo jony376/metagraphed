@@ -2564,15 +2564,24 @@ async function handleRpcUsage(request, env, url) {
       ),
       d1All(
         env,
-        `SELECT CAST(observed_at / ? AS INTEGER) * ? AS ts,
-                COUNT(*) AS requests,
-                SUM(CASE WHEN ok = 1 THEN 0 ELSE 1 END) AS errors,
-                AVG(latency_ms) AS avg_latency_ms
-         FROM rpc_proxy_events
-         WHERE observed_at >= ?
-         GROUP BY ts
-         ORDER BY ts ASC
-         LIMIT ?`,
+        // Buckets are aligned to absolute boundaries but `since` is not, so a
+        // full window spans maxBuckets+1 buckets. Keep the most-recent
+        // maxBuckets (inner ORDER BY ts DESC LIMIT) — dropping the partial
+        // oldest bucket rather than the current one — then re-order ascending
+        // for the chart. A bare `ORDER BY ts ASC LIMIT` would drop the current
+        // bucket, leaving the series permanently missing its leading edge.
+        `SELECT ts, requests, errors, avg_latency_ms FROM (
+           SELECT CAST(observed_at / ? AS INTEGER) * ? AS ts,
+                  COUNT(*) AS requests,
+                  SUM(CASE WHEN ok = 1 THEN 0 ELSE 1 END) AS errors,
+                  AVG(latency_ms) AS avg_latency_ms
+           FROM rpc_proxy_events
+           WHERE observed_at >= ?
+           GROUP BY ts
+           ORDER BY ts DESC
+           LIMIT ?
+         )
+         ORDER BY ts ASC`,
         [
           bucketConfig.bucketMs,
           bucketConfig.bucketMs,
