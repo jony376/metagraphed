@@ -141,7 +141,11 @@ export function formatExtrinsic(row) {
     call_module: row.call_module ?? null,
     call_function: row.call_function ?? null,
     call_args,
-    success: row.success == null ? null : row.success === 1,
+    // D1 can return the `success` INTEGER column as a numeric string ("1"/"0"),
+    // same as block_number/extrinsic_index above — a bare `=== 1` would leave a
+    // successful extrinsic mislabeled false. Number()-coerce first, mirroring
+    // toD1Flag in account-events.mjs (#2487).
+    success: row.success == null ? null : Number(row.success) === 1,
     fee_tao: row.fee_tao ?? null,
     tip_tao: row.tip_tao ?? null,
     observed_at: toIso(row.observed_at),

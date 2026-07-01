@@ -189,6 +189,19 @@ test("formatExtrinsic normalizes success (0->false, null->null)", () => {
   );
 });
 
+test("formatExtrinsic coerces a string-typed D1 success cell", () => {
+  assert.equal(
+    formatExtrinsic({ block_number: 1, extrinsic_index: 0, success: "1" })
+      .success,
+    true,
+  );
+  assert.equal(
+    formatExtrinsic({ block_number: 1, extrinsic_index: 0, success: "0" })
+      .success,
+    false,
+  );
+});
+
 test("formatExtrinsic is null-safe on junk + sparse rows", () => {
   assert.equal(formatExtrinsic(null), null);
   assert.equal(formatExtrinsic("x"), null);
