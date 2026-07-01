@@ -1588,6 +1588,16 @@ describe("handleSubnetTransferVolume", () => {
     await errorJson(tooHigh);
   });
 
+  test("rejects a non-integer limit with 400", async () => {
+    const res = await handleSubnetTransferVolume(
+      req(`/api/v1/subnets/${NETUID}/transfer-volume`),
+      emptyEnv(),
+      NETUID,
+      url(`/api/v1/subnets/${NETUID}/transfer-volume?limit=12.5`),
+    );
+    await errorJson(res);
+  });
+
   test("returns schema-stable zeros on cold D1", async () => {
     const body = await assertColdSchema(
       handleSubnetTransferVolume,
@@ -2118,6 +2128,24 @@ describe("handleAccountExtrinsics", () => {
     );
     const body = await errorJson(res);
     assert.equal(body.meta.parameter, "block_end");
+  });
+
+  test("short-circuits an inverted block_start>block_end window before D1", async () => {
+    const { env, captures } = dbWith({ extrinsics: [extrinsicRow()] });
+    const body = await json(
+      await handleAccountExtrinsics(
+        req(`/api/v1/accounts/${SS58}/extrinsics`),
+        env,
+        SS58,
+        url(
+          `/api/v1/accounts/${SS58}/extrinsics?block_start=500&block_end=100`,
+        ),
+      ),
+    );
+    assert.equal(body.data.extrinsic_count, 0);
+    assert.deepEqual(body.data.extrinsics, []);
+    assert.equal(body.data.next_cursor, null);
+    assert.equal(captures.sql.length, 0);
   });
 
   test("happy path returns signer-matched extrinsics", async () => {

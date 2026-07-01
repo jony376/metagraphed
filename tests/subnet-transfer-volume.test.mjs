@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, test, vi } from "vitest";
+import { describe, test } from "vitest";
 import {
   buildSubnetTransferVolume,
   loadSubnetTransferVolume,
@@ -120,8 +120,7 @@ describe("buildSubnetTransferVolume", () => {
 
 describe("loadSubnetTransferVolume", () => {
   test("attributes Transfer rows via the neurons snapshot, not a netuid column", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-30T00:00:00.000Z"));
+    const nowMs = Date.parse("2026-06-30T00:00:00.000Z");
     const calls = [];
     const d1 = async (sql, params) => {
       calls.push({ sql, params });
@@ -147,6 +146,7 @@ describe("loadSubnetTransferVolume", () => {
     const { data, generatedAt } = await loadSubnetTransferVolume(d1, 7, {
       windowLabel: "30d",
       limit: 10,
+      nowMs,
     });
     assert.equal(calls.length, 3);
     for (const { sql, params } of calls) {
@@ -154,7 +154,7 @@ describe("loadSubnetTransferVolume", () => {
       assert.match(sql, /FROM neurons WHERE netuid = \?/);
       assert.ok(params.includes(7));
       assert.ok(params.includes(TRANSFER_KIND));
-      assert.ok(params.includes(Date.now() - 30 * DAY_MS));
+      assert.ok(params.includes(nowMs - 30 * DAY_MS));
     }
     assert.doesNotMatch(calls[0].sql, /netuid = \? AND event_kind/);
     assert.equal(data.netuid, 7);
@@ -162,7 +162,6 @@ describe("loadSubnetTransferVolume", () => {
     assert.equal(data.total_volume_tao, 250);
     assert.equal(data.top_senders[0].address, "5Sender");
     assert.equal(generatedAt, new Date(1717900000000).toISOString());
-    vi.useRealTimers();
   });
 
   test("top_receivers ranks only registered subnet hotkeys, not external counterparties", async () => {
@@ -209,22 +208,20 @@ describe("loadSubnetTransferVolume", () => {
   });
 
   test("defaults to the 30d window and limit when none is given", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-30T00:00:00.000Z"));
+    const nowMs = Date.parse("2026-06-30T00:00:00.000Z");
     const calls = [];
     const d1 = async (sql, params) => {
       calls.push({ sql, params });
       if (/COUNT\(DISTINCT CASE WHEN coldkey IN/.test(sql)) return [{}];
       return [];
     };
-    const { data } = await loadSubnetTransferVolume(d1, 1, {});
+    const { data } = await loadSubnetTransferVolume(d1, 1, { nowMs });
     assert.equal(data.window, DEFAULT_SUBNET_TRANSFER_VOLUME_WINDOW);
     assert.equal(
       calls[0].params[3],
-      Date.now() - SUBNET_TRANSFER_VOLUME_WINDOWS["30d"] * DAY_MS,
+      nowMs - SUBNET_TRANSFER_VOLUME_WINDOWS["30d"] * DAY_MS,
     );
     assert.equal(calls[1].params[3], SUBNET_TRANSFER_LIMIT_DEFAULT);
-    vi.useRealTimers();
   });
 
   test("cold D1 yields zeroed totals and a null generated_at", async () => {
@@ -318,8 +315,7 @@ describe("loadSubnetTransferVolume", () => {
   });
 
   test("an unknown window label is normalized to the default in the artifact", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-30T00:00:00.000Z"));
+    const nowMs = Date.parse("2026-06-30T00:00:00.000Z");
     let captured;
     const d1 = async (sql, params) => {
       if (/COUNT\(DISTINCT CASE WHEN coldkey IN/.test(sql)) captured = params;
@@ -327,13 +323,24 @@ describe("loadSubnetTransferVolume", () => {
     };
     const { data } = await loadSubnetTransferVolume(d1, 7, {
       windowLabel: "bogus",
+      nowMs,
     });
     assert.equal(data.window, DEFAULT_SUBNET_TRANSFER_VOLUME_WINDOW);
     assert.equal(
       captured[3],
-      Date.now() - SUBNET_TRANSFER_VOLUME_WINDOWS["30d"] * DAY_MS,
+      nowMs - SUBNET_TRANSFER_VOLUME_WINDOWS["30d"] * DAY_MS,
     );
-    vi.useRealTimers();
+  });
+
+  test("nowMs controls the window cutoff for deterministic boundary tests", async () => {
+    const nowMs = 1_700_000_000_000;
+    let cutoff;
+    const d1 = async (sql, params) => {
+      if (/COUNT\(DISTINCT CASE WHEN coldkey IN/.test(sql)) cutoff = params[3];
+      return [];
+    };
+    await loadSubnetTransferVolume(d1, 7, { windowLabel: "7d", nowMs });
+    assert.equal(cutoff, nowMs - 7 * DAY_MS);
   });
 
   test("coerces and caps a fractional direct-call limit before binding LIMIT", async () => {

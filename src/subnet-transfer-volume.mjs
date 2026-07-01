@@ -14,7 +14,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const TRANSFER_KIND = "Transfer";
 
 // Supported windows (label -> days), the same set the stake-flow route exposes so
-// per-subnet capital-movement analytics stay consistent.
+// per-subnet capital-movement analytics stay consistent. Unsupported labels are
+// normalized here for direct/internal callers; the Worker handler rejects them with 400.
 export const SUBNET_TRANSFER_VOLUME_WINDOWS = { "7d": 7, "30d": 30, "90d": 90 };
 export const DEFAULT_SUBNET_TRANSFER_VOLUME_WINDOW = "30d";
 export const SUBNET_TRANSFER_LIMIT_DEFAULT = 20;
@@ -129,11 +130,12 @@ export async function loadSubnetTransferVolume(
   {
     windowLabel = DEFAULT_SUBNET_TRANSFER_VOLUME_WINDOW,
     limit = SUBNET_TRANSFER_LIMIT_DEFAULT,
+    nowMs = Date.now(),
   } = {},
 ) {
   const canonicalWindow = resolveWindowLabel(windowLabel);
   const days = SUBNET_TRANSFER_VOLUME_WINDOWS[canonicalWindow];
-  const cutoff = Date.now() - days * DAY_MS;
+  const cutoff = nowMs - days * DAY_MS;
   const cap = resolveLimit(limit);
 
   const totalsRows = await d1(
