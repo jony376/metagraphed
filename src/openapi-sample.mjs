@@ -402,7 +402,14 @@ export function sampleFromSchema(
     let merged = {};
     let scalar;
     for (const sub of schema.allOf) {
-      const part = sampleFromSchema(sub, components, name, depth, activeRefs, options);
+      const part = sampleFromSchema(
+        sub,
+        components,
+        name,
+        depth,
+        activeRefs,
+        options,
+      );
       if (part && typeof part === "object" && !Array.isArray(part)) {
         merged = { ...merged, ...part };
       } else if (part !== null && part !== undefined) {

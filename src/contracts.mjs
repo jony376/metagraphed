@@ -2742,9 +2742,16 @@ export function buildOpenApiArtifact(generatedAt, componentSchemas) {
                 // Deterministic worked example (schema-valid, no live data) so
                 // Swagger UI + agents see a concrete response shape. Generated
                 // from the schema; enforced by validate-openapi-examples.
-                example: sampleFromSchema(responseSchema, componentSchemas, "", 0, null, {
-                  contractVersion: CONTRACT_VERSION,
-                }),
+                example: sampleFromSchema(
+                  responseSchema,
+                  componentSchemas,
+                  "",
+                  0,
+                  null,
+                  {
+                    contractVersion: CONTRACT_VERSION,
+                  },
+                ),
               },
             },
           },
