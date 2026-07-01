@@ -110,6 +110,7 @@ import {
   parseHistoryWindow,
 } from "./neuron-history.mjs";
 import { loadSubnetTurnover } from "./turnover.mjs";
+import { loadSubnetYield } from "./subnet-yield.mjs";
 import { isFinneySs58Address, loadAccountBalance } from "./account-balance.mjs";
 import { decodeCursor, encodeCursor } from "./cursor.mjs";
 import { loadBlocks, loadBlock } from "./blocks.mjs";
@@ -146,7 +147,7 @@ const MCP_LATEST_PROTOCOL = MCP_PROTOCOL_VERSIONS[0];
 //   - change or remove a tool's I/O       → MAJOR
 //   - behavioral-only fix (no I/O change) → PATCH
 // Reported in serverInfo.version (initialize) + the generated server-card.json.
-export const MCP_SERVER_VERSION = "1.14.0";
+export const MCP_SERVER_VERSION = "1.15.0";
 
 export const MCP_SERVER_INFO = {
   name: "metagraphed",
@@ -215,7 +216,9 @@ export const MCP_INSTRUCTIONS =
   "emission decentralization metrics (Gini, HHI, Nakamoto), " +
   "get_subnet_concentration_history the decentralization trend over time, " +
   "get_subnet_turnover validator-set and registration churn between two " +
-  "boundary snapshots, get_registry_leaderboards the live " +
+  "boundary snapshots, get_subnet_yield per-UID emission-per-stake return " +
+  "rates plus distribution percentiles over the current metagraph snapshot, " +
+  "get_registry_leaderboards the live " +
   "cross-subnet health/economics boards, compare_subnets a side-by-side view " +
   "across structure/economics/health, get_global_incidents recent cross-subnet " +
   "probe failures, get_chain_signers the windowed most-active-account " +
@@ -799,6 +802,17 @@ function optionalBoolean(args, key) {
     throw toolError("invalid_params", `Argument \`${key}\` must be a boolean.`);
   }
   return value;
+}
+
+function optionalSuccessFilter(args) {
+  const value = args?.success;
+  if (value === undefined || value === null) return undefined;
+  if (value === true) return true;
+  if (value === false) return false;
+  throw toolError(
+    "invalid_params",
+    "Argument `success` must be a boolean when provided.",
+  );
 }
 
 function requireString(args, key) {
@@ -1653,10 +1667,8 @@ export const MCP_TOOLS = [
     async handler(args, ctx) {
       const parsed = parseEconomicsTrendsWindow(args?.window);
       if (args?.window !== undefined && parsed === null) {
-        throw toolError(
-          "invalid_params",
-          "window must be one of: 7d, 30d, 90d, 1y, all.",
-        );
+        const { error } = parseHistoryWindow(args.window);
+        throw toolError("invalid_params", error.message);
       }
       const { label, days } = parsed;
       const { data } = await loadEconomicsTrends(mcpD1Runner(ctx), {
@@ -1752,6 +1764,30 @@ export const MCP_TOOLS = [
         windowLabel: label,
         windowDays: days,
       });
+    },
+  },
+  {
+    name: "get_subnet_yield",
+    title: "Get subnet emission yield distribution",
+    description:
+      "Fetch one subnet's per-UID emission yield (emission_tao over " +
+      "stake_tao) from the current metagraph snapshot: each UID ranked by " +
+      "return rate with stake, emission, role, and an above/below/at-median " +
+      "label, plus subnet aggregate yield and mean/p25/median/p75/p90 " +
+      "percentiles over UIDs with stake. Zero-stake UIDs get null yield and " +
+      "sink to the bottom. Snapshot-based (no time window). Mirrors " +
+      "GET /api/v1/subnets/{netuid}/yield.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        netuid: { type: "integer", description: "Subnet netuid.", minimum: 0 },
+      },
+      required: ["netuid"],
+      additionalProperties: false,
+    },
+    async handler(args, ctx) {
+      const netuid = requireNetuid(args);
+      return loadSubnetYield(mcpD1Runner(ctx), netuid);
     },
   },
   {
@@ -2187,11 +2223,11 @@ export const MCP_TOOLS = [
     description:
       "Fetch the paginated first-party chain-event history for one account by its " +
       "SS58 address (hotkey OR coldkey), newest first: each event's kind, block, " +
-      "subnet, UID, amount, and timestamp. Optionally filter by event kind (e.g. " +
-      "StakeAdded, StakeRemoved, NeuronRegistered, AxonServed, WeightsSet) and page " +
-      "with limit (1-1000, default 100) / offset, or follow next_cursor for stable " +
-      "keyset pagination. Use it to trace exactly what a wallet has done over time. " +
-      "Events are decoded directly from the chain.",
+      "Subnet, UID, amount, and timestamp. Optionally filter by event kind (e.g. " +
+      "StakeAdded, StakeRemoved, NeuronRegistered, AxonServed, WeightsSet). " +
+      "Optionally constrain block height with block_start/block_end (inclusive). " +
+      "Page with limit (1-1000, default 100) / offset, or follow next_cursor for stable " +
+      "keyset pagination. Mirrors GET /api/v1/accounts/{ss58}/events.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2206,6 +2242,18 @@ export const MCP_TOOLS = [
           description:
             "Optional event-kind filter, e.g. 'StakeAdded' or 'NeuronRegistered'. " +
             "Omit for all kinds; an unknown kind simply matches nothing.",
+        },
+        block_start: {
+          type: "integer",
+          description:
+            "Optional inclusive lower block bound; omit for no lower limit.",
+          minimum: 0,
+        },
+        block_end: {
+          type: "integer",
+          description:
+            "Optional inclusive upper block bound; omit for no upper limit.",
+          minimum: 0,
         },
         limit: {
           type: "integer",
@@ -2233,6 +2281,8 @@ export const MCP_TOOLS = [
       const kind = optionalString(args, "kind");
       const cursor = optionalString(args, "cursor");
       return loadAccountEvents(mcpD1Runner(ctx), ss58, {
+        blockStart: optionalNonNegativeInt(args, "block_start"),
+        blockEnd: optionalNonNegativeInt(args, "block_end"),
         limit: args?.limit,
         offset: args?.offset,
         kind,
@@ -2554,12 +2604,60 @@ export const MCP_TOOLS = [
     description:
       "Fetch the recent-block feed (newest first) from the chain block-explorer tier: " +
       "block number, hash, parent hash, author, extrinsic count, event count, and " +
-      "timestamp. Page with limit (1-100, default 50) / offset, or follow next_cursor " +
-      "for stable keyset pagination. Useful for scanning recent chain activity or " +
-      "finding a block to inspect with get_block.",
+      "timestamp. Optionally filter by author (SS58), spec_version, block_start/" +
+      "block_end (inclusive height range), from/to (observed_at epoch-ms range), " +
+      "min_extrinsics, or min_events. Page with limit (1-100, default 50) / offset, " +
+      "or follow next_cursor for stable keyset pagination. Mirrors GET /api/v1/blocks.",
     inputSchema: {
       type: "object",
       properties: {
+        author: {
+          type: "string",
+          description:
+            "Optional block author SS58 address filter. Omit for all authors.",
+          pattern: SS58_PATTERN_SOURCE,
+        },
+        spec_version: {
+          type: "integer",
+          description: "Optional runtime spec_version filter. Omit for all.",
+          minimum: 0,
+        },
+        block_start: {
+          type: "integer",
+          description:
+            "Optional inclusive lower block bound; omit for no lower limit.",
+          minimum: 0,
+        },
+        block_end: {
+          type: "integer",
+          description:
+            "Optional inclusive upper block bound; omit for no upper limit.",
+          minimum: 0,
+        },
+        from: {
+          type: "integer",
+          description:
+            "Optional observed_at lower bound (epoch ms). Omit for no lower limit.",
+          minimum: 0,
+        },
+        to: {
+          type: "integer",
+          description:
+            "Optional observed_at upper bound (epoch ms). Omit for no upper limit.",
+          minimum: 0,
+        },
+        min_extrinsics: {
+          type: "integer",
+          description:
+            "Optional minimum extrinsic_count per block. Omit for no floor.",
+          minimum: 0,
+        },
+        min_events: {
+          type: "integer",
+          description:
+            "Optional minimum event_count per block. Omit for no floor.",
+          minimum: 0,
+        },
         limit: {
           type: "integer",
           description: "Max blocks to return (1-100, default 50).",
@@ -2583,7 +2681,17 @@ export const MCP_TOOLS = [
     },
     async handler(args, ctx) {
       const cursor = optionalString(args, "cursor");
+      const author = optionalString(args, "author");
       return loadBlocks(mcpD1Runner(ctx), {
+        author: author ?? undefined,
+        specVersion: optionalNonNegativeInt(args, "spec_version") ?? undefined,
+        blockStart: optionalNonNegativeInt(args, "block_start") ?? undefined,
+        blockEnd: optionalNonNegativeInt(args, "block_end") ?? undefined,
+        from: optionalNonNegativeInt(args, "from") ?? undefined,
+        to: optionalNonNegativeInt(args, "to") ?? undefined,
+        minExtrinsics:
+          optionalNonNegativeInt(args, "min_extrinsics") ?? undefined,
+        minEvents: optionalNonNegativeInt(args, "min_events") ?? undefined,
         limit: args?.limit,
         offset: args?.offset,
         cursor: cursor ?? undefined,
@@ -2705,13 +2813,20 @@ export const MCP_TOOLS = [
     title: "List extrinsics with optional filters",
     description:
       "Fetch the extrinsic feed (newest first) from the chain extrinsic tier, with " +
-      "optional filters: signer (SS58 address), call_module (e.g. 'SubtensorModule'), " +
-      "call_function (e.g. 'set_weights'). Page with limit (1-100, default 50) / " +
-      "offset, or follow next_cursor for stable keyset pagination. Useful for finding " +
-      "specific on-chain calls or all extrinsics from one wallet.",
+      "optional filters: block (exact height), signer (SS58 address), call_module " +
+      "(e.g. 'SubtensorModule'), call_function (e.g. 'set_weights'), success " +
+      "(true|false), block_start/block_end (inclusive height range), and from/to " +
+      "(observed_at epoch-ms range). Page with limit (1-100, default 50) / offset, " +
+      "or follow next_cursor for stable keyset pagination. Mirrors GET /api/v1/extrinsics.",
     inputSchema: {
       type: "object",
       properties: {
+        block: {
+          type: "integer",
+          description:
+            "Optional exact block_number filter. Omit for all blocks.",
+          minimum: 0,
+        },
         signer: {
           type: "string",
           description:
@@ -2727,6 +2842,36 @@ export const MCP_TOOLS = [
           type: "string",
           description:
             "Optional call function filter, e.g. 'set_weights'. Omit for all.",
+        },
+        success: {
+          type: "boolean",
+          description:
+            "Optional success filter: true for succeeded extrinsics only, false " +
+            "for failed only. Omit for all.",
+        },
+        block_start: {
+          type: "integer",
+          description:
+            "Optional inclusive lower block bound; omit for no lower limit.",
+          minimum: 0,
+        },
+        block_end: {
+          type: "integer",
+          description:
+            "Optional inclusive upper block bound; omit for no upper limit.",
+          minimum: 0,
+        },
+        from: {
+          type: "integer",
+          description:
+            "Optional observed_at lower bound (epoch ms). Omit for no lower limit.",
+          minimum: 0,
+        },
+        to: {
+          type: "integer",
+          description:
+            "Optional observed_at upper bound (epoch ms). Omit for no upper limit.",
+          minimum: 0,
         },
         limit: {
           type: "integer",
@@ -2755,9 +2900,15 @@ export const MCP_TOOLS = [
       const callFunction = optionalString(args, "call_function");
       const cursor = optionalString(args, "cursor");
       return loadExtrinsics(mcpD1Runner(ctx), {
+        block: optionalNonNegativeInt(args, "block") ?? undefined,
         signer: signer ?? undefined,
         callModule: callModule ?? undefined,
         callFunction: callFunction ?? undefined,
+        success: optionalSuccessFilter(args),
+        blockStart: optionalNonNegativeInt(args, "block_start") ?? undefined,
+        blockEnd: optionalNonNegativeInt(args, "block_end") ?? undefined,
+        from: optionalNonNegativeInt(args, "from") ?? undefined,
+        to: optionalNonNegativeInt(args, "to") ?? undefined,
         limit: args?.limit,
         offset: args?.offset,
         cursor: cursor ?? undefined,
@@ -4447,6 +4598,29 @@ const TOOL_OUTPUT_SCHEMAS = {
         emission_nakamoto_coefficient: ANY,
         emission_top_10pct_share: ANY,
       }),
+    },
+  },
+  get_subnet_yield: {
+    type: "object",
+    additionalProperties: true,
+    required: ["netuid", "neuron_count", "neurons"],
+    properties: {
+      schema_version: { type: "integer" },
+      netuid: { type: "integer" },
+      captured_at: NULLABLE_STRING,
+      block_number: NULLABLE_INT,
+      neuron_count: { type: "integer" },
+      validator_count: { type: "integer" },
+      miner_count: { type: "integer" },
+      total_stake_tao: { type: ["number", "null"] },
+      total_emission_tao: { type: ["number", "null"] },
+      subnet_yield: { type: ["number", "null"] },
+      mean_yield: { type: ["number", "null"] },
+      median_yield: { type: ["number", "null"] },
+      p25_yield: { type: ["number", "null"] },
+      p75_yield: { type: ["number", "null"] },
+      p90_yield: { type: ["number", "null"] },
+      neurons: { type: "array", items: { type: "object" } },
     },
   },
   get_subnet_turnover: {
