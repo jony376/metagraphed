@@ -1226,6 +1226,21 @@ test("loadAccountHistory binds netuid/from/to filters and clamps pagination", as
   ]);
 });
 
+test("loadAccountHistory short-circuits an inverted from>to window before D1", async () => {
+  let called = false;
+  const out = await loadAccountHistory(
+    async () => {
+      called = true;
+      return [];
+    },
+    "5Hk",
+    { from: "2026-06-30", to: "2026-06-01", limit: 50, offset: 0 },
+  );
+  assert.equal(out.day_count, 0);
+  assert.deepEqual(out.days, []);
+  assert.equal(called, false);
+});
+
 test("loadAccountHistory applies a (day, netuid) keyset cursor and drops offset", async () => {
   let captured;
   const out = await loadAccountHistory(

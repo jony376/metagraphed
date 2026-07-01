@@ -1848,6 +1848,21 @@ describe("handleAccountHistory", () => {
     assert.ok(/netuid = \?/.test(sql));
     assert.ok(captures.params.some((p) => p.includes(NETUID)));
   });
+
+  test("short-circuits an inverted from>to date window before D1", async () => {
+    const { env, captures } = dbWith({ accountEventsDaily: [accountDayRow()] });
+    const body = await json(
+      await handleAccountHistory(
+        req(`/api/v1/accounts/${SS58}/history`),
+        env,
+        SS58,
+        url(`/api/v1/accounts/${SS58}/history?from=2026-06-30&to=2026-06-01`),
+      ),
+    );
+    assert.equal(body.data.day_count, 0);
+    assert.deepEqual(body.data.days, []);
+    assert.equal(captures.sql.length, 0);
+  });
 });
 
 describe("handleAccountExtrinsics", () => {

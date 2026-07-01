@@ -781,7 +781,8 @@ export async function handleAccountEvents(request, env, ss58, url) {
 // GET /api/v1/accounts/{ss58}/history (#1854): the durable per-day activity
 // series for an account, from the account_events_daily rollup. ?netuid filters
 // to one subnet; ?from / ?to are YYYY-MM-DD bounds (lexicographic on the TEXT
-// `day` column); ?limit (<=1000) / ?offset. Newest day first. Cold/absent store
+// `day` column); ?limit (<=1000) / ?offset. Newest day first. Inverted from>to
+// date bounds short-circuit to an empty feed before D1 (never throws). Cold/absent store
 // → schema-stable zero (never 404).
 //
 // SCOPE: the rollup writes only hotkey-attributed rows, so an ss58 with no
@@ -814,6 +815,27 @@ export async function handleAccountHistory(request, env, ss58, url) {
       "invalid_param",
       "netuid must be a non-negative integer.",
       400,
+    );
+  }
+  // Inverted YYYY-MM-DD bounds are a deterministic no-match. Short-circuit before
+  // D1 so callers cannot force a scan to prove an impossible empty page.
+  if (from && to && from > to) {
+    const data = buildAccountHistory([], ss58, {
+      limit,
+      offset,
+      nextCursor: null,
+    });
+    return envelopeResponse(
+      request,
+      {
+        data,
+        meta: await accountMeta(
+          env,
+          `/metagraph/accounts/${ss58}/history.json`,
+          null,
+        ),
+      },
+      "short",
     );
   }
   // Keyset (cursor) pagination over (day, netuid). day sorts as TEXT (YYYY-MM-DD
