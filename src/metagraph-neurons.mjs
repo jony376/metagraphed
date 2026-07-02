@@ -50,7 +50,9 @@ const GLOBAL_VALIDATOR_SUBNET_LIMIT = 10;
 const RAO_PER_TAO = 1e9;
 
 function toIso(ms) {
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+  if (ms == null) return null;
+  const n = Number(ms);
+  return Number.isFinite(n) && n > 0 ? new Date(n).toISOString() : null;
 }
 
 function numberOrZero(value) {

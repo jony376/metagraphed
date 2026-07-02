@@ -260,6 +260,20 @@ describe("metagraph-neurons builders", () => {
     );
   });
 
+  test("coerces string-typed captured_at cells in snapshot stamp and neuron detail", () => {
+    const captured = "1750000000000";
+    const meta = buildSubnetMetagraph([{ ...ROW, captured_at: captured }], 7);
+    assert.equal(meta.captured_at, new Date(Number(captured)).toISOString());
+    const vals = buildSubnetValidators([{ ...ROW, captured_at: captured }], 7);
+    assert.equal(vals.captured_at, new Date(Number(captured)).toISOString());
+    const detail = buildNeuronDetail({ ...ROW, captured_at: captured }, 7);
+    assert.equal(detail.captured_at, new Date(Number(captured)).toISOString());
+    assert.equal(
+      buildNeuronDetail({ ...ROW, captured_at: "not-a-date" }, 7).captured_at,
+      null,
+    );
+  });
+
   test("buildGlobalValidators groups validator identities across subnets", () => {
     const data = buildGlobalValidators(
       [
