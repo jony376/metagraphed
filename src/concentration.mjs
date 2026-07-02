@@ -37,14 +37,21 @@ function roundRatio(value, dp = 6) {
 }
 
 function captureStamp(value) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return { ms: value, value: new Date(value).toISOString() };
-  }
+  if (value == null) return null;
   if (typeof value === "string") {
+    if (/^\d+$/.test(value)) {
+      const ms = Number(value);
+      if (Number.isFinite(ms) && ms > 0) {
+        return { ms, value: new Date(ms).toISOString() };
+      }
+      return null;
+    }
     const ms = Date.parse(value);
     if (Number.isFinite(ms)) return { ms, value };
   }
-  return null;
+  const ms = Number(value);
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  return { ms, value: new Date(ms).toISOString() };
 }
 
 // Coerce a raw column array to the finite, strictly-positive values that actually

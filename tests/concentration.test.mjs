@@ -188,6 +188,17 @@ describe("buildConcentration", () => {
     assert.equal(data.captured_at, "2025-06-15T15:07:40.000Z");
   });
 
+  test("converts D1 string-typed epoch-millisecond captured_at to ISO strings", () => {
+    const data = buildConcentration(
+      [
+        { stake_tao: 1, emission_tao: 1, captured_at: "1750000000000" },
+        { stake_tao: 2, emission_tao: 2, captured_at: "1750000060000" },
+      ],
+      9,
+    );
+    assert.equal(data.captured_at, "2025-06-15T15:07:40.000Z");
+  });
+
   test("tolerates rows missing captured_at / value columns", () => {
     const data = buildConcentration(
       [
