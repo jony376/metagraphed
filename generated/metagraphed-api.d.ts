@@ -1728,7 +1728,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Fetch the network-wide validator/operator leaderboard: validator-permit identities grouped across all current subnet memberships, with trust metrics and top membership rows. Sort by subnet_count (default), uid_count, avg_validator_trust, or max_validator_trust; limit caps the list (default 20, max 100). Per-membership stake/emission values remain scoped to subnets[] and are not summed across subnets. Computed live from the neurons D1 tier. */
+        /** Fetch the network-wide validator/operator leaderboard: validator-permit identities grouped across all current subnet memberships, with trust metrics, cross-subnet stake/emission totals, stake dominance, and top membership rows. Sort by subnet_count (default), uid_count, avg_validator_trust, max_validator_trust, total_stake, total_emission, or stake_dominance; limit caps the list (default 20, max 100). Computed live from the neurons D1 tier. */
         get: operations["globalValidators"];
         put?: never;
         post?: never;
@@ -3271,11 +3271,14 @@ export interface components {
             /** Format: date-time */
             latest_captured_at: string | null;
             max_validator_trust: number | null;
+            stake_dominance: number | null;
             subnet_count: number;
             subnets: components["schemas"]["GlobalValidatorSubnet"][];
+            total_emission_tao: number;
+            total_stake_tao: number;
             uid_count: number;
         };
-        /** @description Network-wide validator/operator leaderboard: validator-permit identities grouped across all current subnet memberships and ranked by subnet footprint, UID footprint, or validator trust, served live from the neurons D1 tier at /api/v1/validators (no static file). Per-membership stake/emission values are exposed inside subnets[] and intentionally not summed across subnets. */
+        /** @description Network-wide validator/operator leaderboard: validator-permit identities grouped across all current subnet memberships and ranked by subnet footprint, UID footprint, validator trust, or cross-subnet stake/emission totals, served live from the neurons D1 tier at /api/v1/validators (no static file). */
         GlobalValidatorsArtifact: {
             block_number?: number | null;
             /** Format: date-time */
@@ -3283,7 +3286,7 @@ export interface components {
             limit: number;
             schema_version: number;
             /** @enum {string} */
-            sort: "subnet_count" | "uid_count" | "avg_validator_trust" | "max_validator_trust";
+            sort: "avg_validator_trust" | "max_validator_trust" | "stake_dominance" | "subnet_count" | "total_emission" | "total_stake" | "uid_count";
             validator_count: number;
             validators: components["schemas"]["GlobalValidatorEntry"][];
         } & {
@@ -19586,7 +19589,7 @@ export interface operations {
     globalValidators: {
         parameters: {
             query?: {
-                sort?: "subnet_count" | "uid_count" | "avg_validator_trust" | "max_validator_trust";
+                sort?: "avg_validator_trust" | "max_validator_trust" | "stake_dominance" | "subnet_count" | "total_emission" | "total_stake" | "uid_count";
                 limit?: number;
             };
             header?: never;
@@ -19611,7 +19614,7 @@ export interface operations {
                      *         "captured_at": "2026-06-01T00:00:00.000Z",
                      *         "limit": 1,
                      *         "schema_version": 1,
-                     *         "sort": "subnet_count",
+                     *         "sort": "avg_validator_trust",
                      *         "validator_count": 1,
                      *         "validators": [
                      *           {
@@ -19622,6 +19625,7 @@ export interface operations {
                      *             "latest_block_number": 5000000,
                      *             "latest_captured_at": "2026-06-01T00:00:00.000Z",
                      *             "max_validator_trust": 0.5,
+                     *             "stake_dominance": 0.5,
                      *             "subnet_count": 1,
                      *             "subnets": [
                      *               {
@@ -19632,6 +19636,8 @@ export interface operations {
                      *                 "validator_trust": 0.5
                      *               }
                      *             ],
+                     *             "total_emission_tao": 0.5,
+                     *             "total_stake_tao": 0.5,
                      *             "uid_count": 1
                      *           }
                      *         ]

@@ -958,7 +958,7 @@ export const PUBLIC_ARTIFACTS = [
   artifact(
     "global-validators",
     "/metagraph/validators.json",
-    "Network-wide validator/operator leaderboard: validator-permit identities grouped across all current subnet memberships and ranked by subnet footprint, UID footprint, or validator trust, computed live from the neurons D1 tier at /api/v1/validators (no static file).",
+    "Network-wide validator/operator leaderboard: validator-permit identities grouped across all current subnet memberships and ranked by subnet footprint, UID footprint, validator trust, or cross-subnet stake/emission totals, computed live from the neurons D1 tier at /api/v1/validators (no static file).",
     "GlobalValidatorsArtifact",
   ),
   artifact(
@@ -1846,7 +1846,7 @@ export const API_ROUTES = [
     "GET",
     "/api/v1/validators",
     "/metagraph/validators.json",
-    "Fetch the network-wide validator/operator leaderboard: validator-permit identities grouped across all current subnet memberships, with trust metrics and top membership rows. Sort by subnet_count (default), uid_count, avg_validator_trust, or max_validator_trust; limit caps the list (default 20, max 100). Per-membership stake/emission values remain scoped to subnets[] and are not summed across subnets. Computed live from the neurons D1 tier.",
+    "Fetch the network-wide validator/operator leaderboard: validator-permit identities grouped across all current subnet memberships, with trust metrics, cross-subnet stake/emission totals, stake dominance, and top membership rows. Sort by subnet_count (default), uid_count, avg_validator_trust, max_validator_trust, total_stake, total_emission, or stake_dominance; limit caps the list (default 20, max 100). Computed live from the neurons D1 tier.",
     "short",
     ["validators", "analytics"],
     [
@@ -1855,10 +1855,13 @@ export const API_ROUTES = [
         schema: {
           type: "string",
           enum: [
-            "subnet_count",
-            "uid_count",
             "avg_validator_trust",
             "max_validator_trust",
+            "stake_dominance",
+            "subnet_count",
+            "total_emission",
+            "total_stake",
+            "uid_count",
           ],
         },
       },

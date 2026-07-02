@@ -328,8 +328,9 @@ describe("metagraph-neurons builders", () => {
     assert.equal(top.coldkey_count, 2);
     assert.equal(top.subnet_count, 3);
     assert.equal(top.uid_count, 3);
-    assert.equal("total_stake_tao" in top, false);
-    assert.equal("total_emission_tao" in top, false);
+    assert.equal(top.total_stake_tao, 151.123456789);
+    assert.equal(top.total_emission_tao, 16);
+    assert.equal(top.stake_dominance, 0.232096);
     assert.equal(top.avg_validator_trust, 0.6);
     assert.equal(top.max_validator_trust, 0.8);
     assert.equal(top.latest_captured_at, new Date(1750000001000).toISOString());
@@ -523,6 +524,88 @@ describe("metagraph-neurons builders", () => {
     // and top-level block numbers must be null.
     assert.equal(data.block_number, null);
     assert.equal(data.validators[0].latest_block_number, null);
+  });
+
+  test("buildGlobalValidators rolls up stake/emission totals and stake dominance", () => {
+    const data = buildGlobalValidators(
+      [
+        {
+          ...ROW,
+          netuid: 1,
+          uid: 0,
+          hotkey: "hk-heavy",
+          stake_tao: 75,
+          emission_tao: 3,
+        },
+        {
+          ...ROW,
+          netuid: 2,
+          uid: 1,
+          hotkey: "hk-heavy",
+          stake_tao: 25,
+          emission_tao: 1,
+        },
+        {
+          ...ROW,
+          netuid: 3,
+          uid: 2,
+          hotkey: "hk-light",
+          stake_tao: 0,
+          emission_tao: 0,
+        },
+        {
+          ...ROW,
+          netuid: 4,
+          uid: 3,
+          hotkey: "hk-bad",
+          stake_tao: "not-a-number",
+          emission_tao: null,
+        },
+      ],
+      { sort: "total_stake", limit: 10 },
+    );
+
+    const heavy = data.validators.find((v) => v.hotkey === "hk-heavy");
+    const light = data.validators.find((v) => v.hotkey === "hk-light");
+    const bad = data.validators.find((v) => v.hotkey === "hk-bad");
+    assert.equal(heavy.total_stake_tao, 100);
+    assert.equal(heavy.total_emission_tao, 4);
+    assert.equal(heavy.stake_dominance, 1);
+    assert.equal(light.total_stake_tao, 0);
+    assert.equal(light.stake_dominance, 0);
+    assert.equal(bad.total_stake_tao, 0);
+    assert.deepEqual(
+      data.validators.map((v) => v.hotkey),
+      ["hk-heavy", "hk-bad", "hk-light"],
+    );
+  });
+
+  test("buildGlobalValidators nulls stake dominance when network stake is zero", () => {
+    const data = buildGlobalValidators(
+      [
+        { ...ROW, netuid: 1, uid: 0, hotkey: "hk-a", stake_tao: 0 },
+        { ...ROW, netuid: 2, uid: 1, hotkey: "hk-b", stake_tao: 0 },
+      ],
+      { sort: "subnet_count", limit: 10 },
+    );
+    assert.equal(
+      data.validators.every((v) => v.stake_dominance === null),
+      true,
+    );
+  });
+
+  test("buildGlobalValidators sorts by total_stake with hotkey tie-break", () => {
+    const data = buildGlobalValidators(
+      [
+        { ...ROW, netuid: 1, uid: 0, hotkey: "hk-b", stake_tao: 50 },
+        { ...ROW, netuid: 2, uid: 1, hotkey: "hk-a", stake_tao: 50 },
+      ],
+      { sort: "total_stake", limit: 10 },
+    );
+    assert.deepEqual(
+      data.validators.map((v) => v.hotkey),
+      ["hk-a", "hk-b"],
+    );
   });
 
   test("builders drop malformed rows and count only real neurons", () => {
