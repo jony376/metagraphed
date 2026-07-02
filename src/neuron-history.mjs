@@ -318,7 +318,7 @@ export function buildNeuronHistory(rows, netuid, uid, { window } = {}) {
       return {
         snapshot_date: r.snapshot_date,
         captured_at: toIso(r.captured_at),
-        block_number: r.block_number ?? null,
+        block_number: toNonNegativeInt(r.block_number),
         ...neuron,
       };
     })
