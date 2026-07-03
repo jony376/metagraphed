@@ -947,12 +947,13 @@ describe("handleNeuronHistory", () => {
   });
 
   test("returns empty/header-only CSV when D1 is cold", async () => {
+    const path = `/api/v1/subnets/${NETUID}/neurons/${UID}/history?format=csv`;
     const res = await handleNeuronHistory(
-      req(`/api/v1/subnets/${NETUID}/neurons/${UID}/history`),
+      req(path),
       emptyEnv(),
       NETUID,
       UID,
-      url(`/api/v1/subnets/${NETUID}/neurons/${UID}/history?format=csv`),
+      url(path),
     );
     assert.equal(res.status, 200);
     const lines = (await res.text()).split("\r\n");
@@ -1154,11 +1155,12 @@ describe("handleSubnetHistory", () => {
     const { env } = dbWith({
       neuronDailySubnet: [subnetHistoryRow()],
     });
+    const path = `/api/v1/subnets/${NETUID}/history?window=90d&format=csv`;
     const res = await handleSubnetHistory(
-      req(`/api/v1/subnets/${NETUID}/history`),
+      req(path),
       env,
       NETUID,
-      url(`/api/v1/subnets/${NETUID}/history?window=90d&format=csv`),
+      url(path),
     );
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("content-type"), "text/csv; charset=utf-8");
@@ -1176,11 +1178,12 @@ describe("handleSubnetHistory", () => {
   });
 
   test("returns empty/header-only CSV when D1 is cold", async () => {
+    const path = `/api/v1/subnets/${NETUID}/history?format=csv`;
     const res = await handleSubnetHistory(
-      req(`/api/v1/subnets/${NETUID}/history`),
+      req(path),
       emptyEnv(),
       NETUID,
-      url(`/api/v1/subnets/${NETUID}/history?format=csv`),
+      url(path),
     );
     assert.equal(res.status, 200);
     const lines = (await res.text()).split("\r\n");
@@ -2597,13 +2600,12 @@ describe("handleAccountHistory", () => {
   });
 
   test("returns header-only CSV for an inverted from>to date window", async () => {
+    const path = `/api/v1/accounts/${SS58}/history?from=2026-06-30&to=2026-06-01&format=csv`;
     const res = await handleAccountHistory(
-      req(`/api/v1/accounts/${SS58}/history`),
+      req(path),
       emptyEnv(),
       SS58,
-      url(
-        `/api/v1/accounts/${SS58}/history?from=2026-06-30&to=2026-06-01&format=csv`,
-      ),
+      url(path),
     );
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("content-type"), "text/csv; charset=utf-8");
@@ -2613,11 +2615,12 @@ describe("handleAccountHistory", () => {
 
   test("returns CSV response when ?format=csv is requested", async () => {
     const { env } = dbWith({ accountEventsDaily: [accountDayRow()] });
+    const path = `/api/v1/accounts/${SS58}/history?format=csv`;
     const res = await handleAccountHistory(
-      req(`/api/v1/accounts/${SS58}/history`),
+      req(path),
       env,
       SS58,
-      url(`/api/v1/accounts/${SS58}/history?format=csv`),
+      url(path),
     );
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("content-type"), "text/csv; charset=utf-8");
@@ -2635,11 +2638,12 @@ describe("handleAccountHistory", () => {
   });
 
   test("returns empty/header-only CSV when D1 is cold", async () => {
+    const path = `/api/v1/accounts/${SS58}/history?format=csv`;
     const res = await handleAccountHistory(
-      req(`/api/v1/accounts/${SS58}/history`),
+      req(path),
       emptyEnv(),
       SS58,
-      url(`/api/v1/accounts/${SS58}/history?format=csv`),
+      url(path),
     );
     assert.equal(res.status, 200);
     const lines = (await res.text()).split("\r\n");

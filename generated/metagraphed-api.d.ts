@@ -11955,7 +11955,7 @@ export interface operations {
                      *       "meta": {
                      *         "artifact_path": "/metagraph/fixtures/7:subnet-api:new_v2.json",
                      *         "cache": "standard",
-                     *         "contract_version": "2026-07-03.2",
+                     *         "contract_version": "2026-07-03.3",
                      *         "generated_at": "1970-01-01T00:00:00.000Z",
                      *         "published_at": null,
                      *         "source": "r2"
