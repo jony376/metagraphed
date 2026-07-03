@@ -5303,7 +5303,8 @@ describe("canonicalSubnetConcentrationHistoryCachePath", () => {
   });
 
   test("preserves raw search when format is combined with a valid window", () => {
-    const raw = "/api/v1/subnets/7/concentration/history?window=30d&format=json";
+    const raw =
+      "/api/v1/subnets/7/concentration/history?window=30d&format=json";
     assert.equal(canonicalSubnetConcentrationHistoryCachePath(url(raw)), raw);
   });
 });
