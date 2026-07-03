@@ -1113,6 +1113,18 @@ describe("handleSubnetHistory", () => {
     assert.equal(body.meta.parameter, "window");
   });
 
+  test("rejects an unsupported format value", async () => {
+    const res = await handleSubnetHistory(
+      req(`/api/v1/subnets/${NETUID}/history`),
+      emptyEnv(),
+      NETUID,
+      url(`/api/v1/subnets/${NETUID}/history?format=pdf`),
+    );
+    const body = await errorJson(res);
+    assert.equal(res.status, 400);
+    assert.equal(body.meta.parameter, "format");
+  });
+
   test("returns CSV response when ?format=csv is requested", async () => {
     const { env } = dbWith({
       neuronDailySubnet: [subnetHistoryRow()],
@@ -2557,6 +2569,21 @@ describe("handleAccountHistory", () => {
     assert.equal(body.data.day_count, 0);
     assert.deepEqual(body.data.days, []);
     assert.equal(captures.sql.length, 0);
+  });
+
+  test("returns header-only CSV for an inverted from>to date window", async () => {
+    const res = await handleAccountHistory(
+      req(`/api/v1/accounts/${SS58}/history`),
+      emptyEnv(),
+      SS58,
+      url(
+        `/api/v1/accounts/${SS58}/history?from=2026-06-30&to=2026-06-01&format=csv`,
+      ),
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "text/csv; charset=utf-8");
+    const lines = (await res.text()).split("\r\n");
+    assert.equal(lines.length, 1);
   });
 
   test("returns CSV response when ?format=csv is requested", async () => {

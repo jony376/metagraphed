@@ -423,6 +423,34 @@ describe("handleUptime", () => {
           p99: 250,
           status: "degraded",
         },
+        {
+          surface_id: "sn-7-acme-subnet-api",
+          surface_key: "subnet-api",
+          day: "2026-06-02",
+          samples: 5,
+          ok_count: 5,
+          uptime_ratio: 1,
+          avg_latency_ms: 80,
+          latency_samples: 5,
+          p50: 70,
+          p95: 90,
+          p99: 100,
+          status: "ok",
+        },
+        {
+          surface_id: "sn-7-other-surface",
+          surface_key: "other-surface",
+          day: "2026-06-01",
+          samples: 3,
+          ok_count: 2,
+          uptime_ratio: 0.6667,
+          avg_latency_ms: 50,
+          latency_samples: 3,
+          p50: 45,
+          p95: 60,
+          p99: 65,
+          status: "degraded",
+        },
       ],
     });
     const res = await handleUptime(
@@ -443,7 +471,9 @@ describe("handleUptime", () => {
       lines[0],
       "surface_id,day,samples,uptime_ratio,avg_latency_ms,latency_sample_count,p50_latency_ms,p95_latency_ms,p99_latency_ms,status",
     );
+    assert.equal(lines.length, 4);
     assert.match(lines[1], /sn-7-acme-subnet-api,2026-06-01,10,0\.9/);
+    assert.match(lines[3], /sn-7-other-surface,2026-06-01,3,/);
   });
 
   test("returns empty/header-only CSV when D1 is cold", async () => {
@@ -784,6 +814,20 @@ describe("canonicalUptimeCachePath", () => {
   test("falls back to raw search on invalid format", () => {
     const raw = "/api/v1/subnets/7/uptime?format=pdf";
     assert.equal(canonicalUptimeCachePath(url(raw)), raw);
+  });
+
+  test("falls back to raw search on invalid min_samples", () => {
+    const raw = "/api/v1/subnets/7/uptime?min_samples=-1";
+    assert.equal(canonicalUptimeCachePath(url(raw)), raw);
+  });
+
+  test("preserves min_samples without format for JSON requests", () => {
+    assert.equal(
+      canonicalUptimeCachePath(
+        url("/api/v1/subnets/7/uptime?window=1y&min_samples=5"),
+      ),
+      "/api/v1/subnets/7/uptime?window=1y&min_samples=5",
+    );
   });
 });
 
