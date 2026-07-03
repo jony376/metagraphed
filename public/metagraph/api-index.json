@@ -625,6 +625,13 @@
     },
     {
       "contract_version": "2026-07-03.2",
+      "id": "chain-transfer-pairs",
+      "path": "/metagraph/chain/transfer-pairs.json",
+      "schema_ref": "#/components/schemas/ChainTransferPairsArtifact",
+      "storage_tier": "r2"
+    },
+    {
+      "contract_version": "2026-07-03.2",
       "id": "chain-fees",
       "path": "/metagraph/chain/fees.json",
       "schema_ref": "#/components/schemas/ChainFeesArtifact",
@@ -5875,6 +5882,47 @@
             "maximum": 100,
             "minimum": 1,
             "type": "integer"
+          }
+        }
+      ]
+    },
+    {
+      "artifact_path": "/metagraph/chain/transfer-pairs.json",
+      "cache": "short",
+      "description": "Fetch network-wide directed native-TAO transfer-pair analytics over a 7d or 30d window: total pairable Balances.Transfer volume + count, unique sender/receiver pairs, returned pair count, top-pair share, and top sender -> receiver pairs ranked by ?sort=volume or ?sort=count (?limit, <=100). Computed live from the account_events Transfer feed; schema-stable zeros + an empty pairs list when cold.",
+      "id": "chain-transfer-pairs",
+      "method": "GET",
+      "path": "/api/v1/chain/transfer-pairs",
+      "public": true,
+      "query_collection": null,
+      "query_filter_names": [],
+      "query_parameters": [
+        {
+          "name": "window",
+          "schema": {
+            "enum": [
+              "7d",
+              "30d"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "name": "limit",
+          "schema": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        {
+          "name": "sort",
+          "schema": {
+            "enum": [
+              "volume",
+              "count"
+            ],
+            "type": "string"
           }
         }
       ]

@@ -1151,6 +1151,12 @@ export const PUBLIC_ARTIFACTS = [
     "ChainTransfersArtifact",
   ),
   artifact(
+    "chain-transfer-pairs",
+    "/metagraph/chain/transfer-pairs.json",
+    "Network-wide directed native-TAO transfer-pair analytics over a 7d or 30d window: total pairable Balances.Transfer volume + count, unique sender/receiver pairs, returned pair count, top-pair share, and top sender -> receiver pairs ranked by volume or count, computed live from the account_events Transfer feed at /api/v1/chain/transfer-pairs (no static file).",
+    "ChainTransferPairsArtifact",
+  ),
+  artifact(
     "chain-fees",
     "/metagraph/chain/fees.json",
     "Fee/tip market analytics (daily totals, averages, exact medians, and a top-fee-payer list) over a 7d or 30d window for the block explorer (#1988), computed live from the first-party extrinsics D1 tier at /api/v1/chain/fees (no static file).",
@@ -2416,6 +2422,24 @@ export const API_ROUTES = [
     [
       { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
       { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
+    ],
+    [],
+  ),
+  route(
+    "chain-transfer-pairs",
+    "GET",
+    "/api/v1/chain/transfer-pairs",
+    "/metagraph/chain/transfer-pairs.json",
+    "Fetch network-wide directed native-TAO transfer-pair analytics over a 7d or 30d window: total pairable Balances.Transfer volume + count, unique sender/receiver pairs, returned pair count, top-pair share, and top sender -> receiver pairs ranked by ?sort=volume or ?sort=count (?limit, <=100). Computed live from the account_events Transfer feed; schema-stable zeros + an empty pairs list when cold.",
+    "short",
+    ["chain", "analytics"],
+    [
+      { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
+      { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
+      {
+        name: "sort",
+        schema: { type: "string", enum: ["volume", "count"] },
+      },
     ],
     [],
   ),
