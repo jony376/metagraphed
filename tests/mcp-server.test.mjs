@@ -10,6 +10,7 @@ import {
   listToolDefinitions,
   handleMcpRequest,
 } from "../src/mcp-server.mjs";
+import * as profilesMcp from "../src/profiles-mcp.mjs";
 import * as healthHistoryMcp from "../src/health-history-mcp.mjs";
 import { KV_HEALTH_RPC_POOL } from "../src/health-prober.mjs";
 import { createLocalArtifactEnv, latestArtifactDate } from "../scripts/lib.mjs";
@@ -5160,6 +5161,211 @@ describe("MCP economics + metagraph data tools", () => {
     );
     assert.equal(res.body.result.isError, true);
     assert.match(res.body.result.content[0].text, /not_found/);
+  });
+
+  const PROFILES_BLOB = {
+    captured_at: "2026-06-20T00:00:00Z",
+    profiles: [
+      {
+        netuid: 7,
+        slug: "allways",
+        name: "Allways",
+        completeness_score: 82,
+        curation_level: "machine-verified",
+        review_state: "verified",
+        confidence: "high",
+        profile_level: "complete",
+      },
+      {
+        netuid: 1,
+        slug: "alpha",
+        name: "Alpha",
+        completeness_score: 60,
+        confidence: "medium",
+      },
+    ],
+  };
+
+  test("list_profiles serves profiles.json with REST list-query filters", async () => {
+    const res = await callTool(
+      "list_profiles",
+      { netuid: 7, sort: "completeness_score", order: "desc" },
+      {
+        deps: makeDeps({ "/metagraph/profiles.json": PROFILES_BLOB }),
+        env: {},
+      },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.profiles.length, 1);
+    assert.equal(out.profiles[0].netuid, 7);
+    assert.equal(out.total, 1);
+  });
+
+  test("list_profiles rejects an invalid sort field", async () => {
+    const res = await callTool(
+      "list_profiles",
+      { sort: "not_a_field" },
+      {
+        deps: makeDeps({ "/metagraph/profiles.json": PROFILES_BLOB }),
+        env: {},
+      },
+    );
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /invalid_params/);
+  });
+
+  test("list_profiles surfaces not_found when profiles.json is absent", async () => {
+    const res = await callTool(
+      "list_profiles",
+      {},
+      { deps: makeDeps({}, {}), env: {} },
+    );
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /not_found/);
+  });
+
+  test("list_profiles handler rethrows unexpected loader failures", async () => {
+    const tool = MCP_TOOLS.find((t) => t.name === "list_profiles");
+    await assert.rejects(
+      () =>
+        tool.handler(
+          {},
+          {
+            env: {},
+            readArtifact: async () => {
+              throw new Error("kaboom");
+            },
+          },
+        ),
+      /kaboom/,
+    );
+  });
+
+  test("get_subnet_profile returns the per-netuid profile artifact", async () => {
+    const detail = {
+      subnet: { netuid: 7, slug: "allways" },
+      profile: { completeness_score: 82 },
+    };
+    const res = await callTool(
+      "get_subnet_profile",
+      { netuid: 7 },
+      {
+        deps: makeDeps({ "/metagraph/profiles/7.json": detail }),
+        env: {},
+      },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.subnet.netuid, 7);
+    assert.equal(out.profile.completeness_score, 82);
+  });
+
+  test("get_subnet_profile surfaces not_found for a missing netuid", async () => {
+    const res = await callTool(
+      "get_subnet_profile",
+      { netuid: 99999 },
+      { deps: makeDeps({}, {}), env: {} },
+    );
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /not_found/);
+  });
+
+  test("get_subnet_profile handler rethrows unexpected loader failures", async () => {
+    const tool = MCP_TOOLS.find((t) => t.name === "get_subnet_profile");
+    await assert.rejects(
+      () =>
+        tool.handler(
+          { netuid: 7 },
+          {
+            env: {},
+            readArtifact: async () => {
+              throw new Error("kaboom");
+            },
+          },
+        ),
+      /kaboom/,
+    );
+  });
+
+  test("get_subnet_profile maps profilesMcp loader errors to tool errors", async () => {
+    const tool = MCP_TOOLS.find((t) => t.name === "get_subnet_profile");
+    const err = profilesMcp.profilesMcpError("not_found", "Profile gone.");
+    const spy = vi
+      .spyOn(profilesMcp, "loadSubnetProfile")
+      .mockRejectedValue(err);
+    try {
+      await assert.rejects(
+        () => tool.handler({ netuid: 7 }, { env: {} }),
+        (thrown) => {
+          assert.equal(thrown.toolError, true);
+          assert.equal(thrown.code, "not_found");
+          assert.match(thrown.message, /Profile gone/);
+          return true;
+        },
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("list_profiles maps profilesMcp loader errors to tool errors", async () => {
+    const tool = MCP_TOOLS.find((t) => t.name === "list_profiles");
+    const err = profilesMcp.profilesMcpError("invalid_params", "bad filter");
+    const spy = vi
+      .spyOn(profilesMcp, "loadProfilesList")
+      .mockRejectedValue(err);
+    try {
+      await assert.rejects(
+        () => tool.handler({}, { env: {} }),
+        (thrown) => {
+          assert.equal(thrown.toolError, true);
+          assert.equal(thrown.code, "invalid_params");
+          assert.match(thrown.message, /bad filter/);
+          return true;
+        },
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("list_profiles payload validates against its declared outputSchema", async () => {
+    const ajv = new Ajv2020({ strict: false });
+    const validate = ajv.compile(
+      listToolDefinitions().find((t) => t.name === "list_profiles")
+        .outputSchema,
+    );
+    const res = await callTool(
+      "list_profiles",
+      { sort: "netuid", order: "asc" },
+      {
+        deps: makeDeps({ "/metagraph/profiles.json": PROFILES_BLOB }),
+        env: {},
+      },
+    );
+    assert.ok(validate(res.body.result.structuredContent));
+  });
+
+  test("get_subnet_profile payload validates against its declared outputSchema", async () => {
+    const ajv = new Ajv2020({ strict: false });
+    const validate = ajv.compile(
+      listToolDefinitions().find((t) => t.name === "get_subnet_profile")
+        .outputSchema,
+    );
+    const detail = {
+      subnet: { netuid: 7, slug: "allways" },
+      profile: { completeness_score: 82 },
+      surfaces: [],
+      endpoints: [],
+    };
+    const res = await callTool(
+      "get_subnet_profile",
+      { netuid: 7 },
+      {
+        deps: makeDeps({ "/metagraph/profiles/7.json": detail }),
+        env: {},
+      },
+    );
+    assert.ok(validate(res.body.result.structuredContent));
   });
 
   // A D1 `neurons` row (booleans as 0/1 INTEGER, stake/emission already TAO floats),

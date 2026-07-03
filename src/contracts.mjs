@@ -1117,7 +1117,7 @@ export const PUBLIC_ARTIFACTS = [
   artifact(
     "extrinsics-feed",
     "/metagraph/extrinsics.json",
-    "The recent-extrinsic feed (newest first) for the block explorer (#1345), served live from the first-party extrinsics D1 tier at /api/v1/extrinsics (no static file).",
+    "The recent-extrinsic feed (newest first) for the block explorer (#1345), served live from the first-party extrinsics D1 tier at /api/v1/extrinsics; pass ?format=csv to download the filtered extrinsic rows as CSV (no static file).",
     "ExtrinsicsFeedArtifact",
   ),
   artifact(
@@ -1179,6 +1179,12 @@ export const PUBLIC_ARTIFACTS = [
     "/metagraph/chain/yield.json",
     "Network-wide emission-yield (return rate) aggregated across all subnets' neurons: the aggregate network return (total emission / total stake), the same split by validator vs miner role, and the count/mean/median/min/max plus p10–p90 spread of the per-neuron emission/stake return, and the subnet_count the snapshot spans — the return-rate companion to chain-performance, computed live from the neurons D1 tier at /api/v1/chain/yield (no static file).",
     "ChainYieldArtifact",
+  ),
+  artifact(
+    "chain-turnover",
+    "/metagraph/chain/turnover.json",
+    "Network-wide validator-set turnover (churn) across all subnets between a window's start and end neuron_daily snapshots: each subnet's validators entered, exited, Jaccard retention, and a 0-100 stability score ranked into a leaderboard, a network rollup over the union of every subnet's validator hotkeys, and a distribution summary of the per-subnet stability scores (count, mean, min, p25, median, p75, p90, max), computed live from the neuron_daily D1 rollup at /api/v1/chain/turnover (no static file).",
+    "ChainTurnoverArtifact",
   ),
   artifact(
     "subnet-uptime",
@@ -2332,10 +2338,10 @@ export const API_ROUTES = [
     "GET",
     "/api/v1/extrinsics",
     "/metagraph/extrinsics.json",
-    "Fetch the recent-extrinsic feed (newest first) for the block explorer; ?limit (<=100) / ?offset (or ?cursor= for stable keyset paging, #1851) and a conjunctive filter set (#1846): ?block=<n>, ?signer=, ?call_module=, ?call_function=, ?success=true|false, ?block_start/?block_end (block range), ?from/?to (observed_at epoch-ms range). Computed live from the first-party extrinsics D1 tier (#1345).",
+    "Fetch the recent-extrinsic feed (newest first) for the block explorer; ?limit (<=100) / ?offset (or ?cursor= for stable keyset paging, #1851) and a conjunctive filter set (#1846): ?block=<n>, ?signer=, ?call_module=, ?call_function=, ?success=true|false, ?block_start/?block_end (block range), ?from/?to (observed_at epoch-ms range). Pass ?format=csv to download the filtered extrinsic rows as CSV. Computed live from the first-party extrinsics D1 tier (#1345).",
     "short",
     ["extrinsics", "analytics"],
-    [
+    csvRouteQuery([
       { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
       { name: "offset", schema: { type: "integer", minimum: 0 } },
       { name: "cursor", schema: { type: "string" } },
@@ -2348,7 +2354,7 @@ export const API_ROUTES = [
       { name: "block_end", schema: { type: "integer", minimum: 0 } },
       { name: "from", schema: { type: "integer", minimum: 0 } },
       { name: "to", schema: { type: "integer", minimum: 0 } },
-    ],
+    ]),
     [],
   ),
   route(
@@ -2489,6 +2495,26 @@ export const API_ROUTES = [
     "short",
     ["chain", "analytics"],
     [],
+    [],
+  ),
+  route(
+    "chain-turnover",
+    "GET",
+    "/api/v1/chain/turnover",
+    "/metagraph/chain/turnover.json",
+    "Fetch network-wide validator-set turnover across all subnets between the window's start and end neuron_daily snapshots: a per-subnet leaderboard (validators entered, exited, Jaccard retention, and a 0-100 stability score) ranked by gross churn, a network rollup over the union of every subnet's validator hotkeys, and a distribution summary (count, mean, min, p25, median, p75, p90, max) of the per-subnet stability scores. Sort is fixed to most-volatile-first; limit caps the leaderboard (default 20, max 100). Computed live from the neuron_daily D1 rollup; schema-stable zeros when cold.",
+    "short",
+    ["chain", "analytics"],
+    [
+      {
+        name: "window",
+        schema: { type: "string", enum: ["7d", "30d", "90d"] },
+      },
+      {
+        name: "limit",
+        schema: { type: "integer", minimum: 1, maximum: 100 },
+      },
+    ],
     [],
   ),
   route(
@@ -3261,6 +3287,12 @@ function csvExampleForRoute(entry) {
     return [
       "surface_id,day,samples,uptime_ratio,avg_latency_ms,latency_sample_count,p50_latency_ms,p95_latency_ms,p99_latency_ms,status",
       "subnet-7-rpc,2026-06-02,1440,0.9986,42,1200,38,55,72,ok",
+    ].join("\r\n");
+  }
+  if (entry.id === "extrinsics-feed") {
+    return [
+      "extrinsic_id,block_number,signer,call_module,call_function,success",
+      "8454388-2,8454388,5Signer,SubtensorModule,add_stake,true",
     ].join("\r\n");
   }
   return "netuid,name\r\n7,Allways";
