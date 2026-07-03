@@ -5272,6 +5272,19 @@ describe("canonicalSubnetHistoryCachePath", () => {
     const raw = "/api/v1/subnets/7/history?format=";
     assert.equal(canonicalSubnetHistoryCachePath(url(raw)), raw);
   });
+
+  test("does not add format=csv when Accept prefers JSON", () => {
+    const jsonAccept = new Request("https://api.metagraph.sh/", {
+      headers: { accept: "application/json" },
+    });
+    assert.equal(
+      canonicalSubnetHistoryCachePath(
+        url("/api/v1/subnets/7/history?window=30d"),
+        jsonAccept,
+      ),
+      "/api/v1/subnets/7/history?window=30d",
+    );
+  });
 });
 
 // Fixture documentation: each factory above mirrors the D1 column contracts used

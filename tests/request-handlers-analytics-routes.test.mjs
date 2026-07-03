@@ -598,6 +598,7 @@ describe("flattenUptimeSurfacesForCsv", () => {
     const rows = flattenUptimeSurfacesForCsv({
       surfaces: [
         { surface_id: "empty-surface", days: [] },
+        { surface_id: "missing-days-key" },
         {
           surface_id: "partial-surface",
           days: [
@@ -968,6 +969,19 @@ describe("canonicalUptimeCachePath", () => {
   test("falls back to raw search on duplicate window params", () => {
     const raw = "/api/v1/subnets/7/uptime?window=90d&window=1y";
     assert.equal(canonicalUptimeCachePath(url(raw)), raw);
+  });
+
+  test("does not add format=csv when Accept prefers JSON", () => {
+    const jsonAccept = new Request("https://api.metagraph.sh/", {
+      headers: { accept: "application/json" },
+    });
+    assert.equal(
+      canonicalUptimeCachePath(
+        url("/api/v1/subnets/7/uptime?window=90d"),
+        jsonAccept,
+      ),
+      "/api/v1/subnets/7/uptime?window=90d",
+    );
   });
 });
 
