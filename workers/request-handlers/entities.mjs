@@ -228,6 +228,19 @@ const ACCOUNT_HISTORY_CSV_COLUMNS = [
   "last_block",
 ];
 
+// CSV projection for the recent-block feed (#2528). The block rows are already
+// flat (formatBlock), so the feed's own fields are the columns in read order.
+const BLOCK_CSV_COLUMNS = [
+  "block_number",
+  "block_hash",
+  "parent_hash",
+  "author",
+  "extrinsic_count",
+  "event_count",
+  "spec_version",
+  "observed_at",
+];
+
 function validateResponseFormat(url) {
   const raw = url.searchParams.get("format");
   if (raw === null && !url.searchParams.has("format")) return null;
@@ -1769,7 +1782,7 @@ export async function handleAccountBalance(request, env, ss58) {
 // absent store → schema-stable zero (never throws). Reuses the chain-events meta
 // (source:"chain-events") since the same first-party poller fills this tier.
 export async function handleBlocks(request, env, url) {
-  const validationError = validateQueryParams(url, [
+  const validationError = validateEntityQuery(url, [
     "limit",
     "offset",
     "cursor",
@@ -1781,6 +1794,7 @@ export async function handleBlocks(request, env, url) {
     "block_end",
     "min_extrinsics",
     "min_events",
+    "format",
   ]);
   if (validationError) return analyticsQueryError(validationError);
   const { limit, offset, cursor } = parsePagination(url, BLOCK_PAGINATION);
@@ -1822,6 +1836,15 @@ export async function handleBlocks(request, env, url) {
     minExtrinsics,
     minEvents,
   });
+  if (csvRequested(url, request)) {
+    return csvResponse(
+      data.blocks,
+      "blocks",
+      "short",
+      request,
+      BLOCK_CSV_COLUMNS,
+    );
+  }
   return envelopeResponse(
     request,
     {

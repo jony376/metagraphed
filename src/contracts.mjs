@@ -1081,7 +1081,7 @@ export const PUBLIC_ARTIFACTS = [
   artifact(
     "blocks-feed",
     "/metagraph/blocks.json",
-    "The recent-block feed (newest first) for the block explorer (#1345), served live from the first-party blocks D1 tier at /api/v1/blocks (no static file).",
+    "The recent-block feed (newest first) for the block explorer (#1345), served live from the first-party blocks D1 tier at /api/v1/blocks; pass ?format=csv to download the filtered block rows as CSV (no static file).",
     "BlocksFeedArtifact",
   ),
   artifact(
@@ -1161,6 +1161,12 @@ export const PUBLIC_ARTIFACTS = [
     "/metagraph/chain/transfer-pairs.json",
     "Network-wide directed native-TAO transfer-pair analytics over a 7d or 30d window: total pairable Balances.Transfer volume + count, unique sender/receiver pairs, returned pair count, top-pair share, and top sender -> receiver pairs ranked by volume or count, computed live from the account_events Transfer feed at /api/v1/chain/transfer-pairs (no static file).",
     "ChainTransferPairsArtifact",
+  ),
+  artifact(
+    "chain-stake-flow",
+    "/metagraph/chain/stake-flow.json",
+    "Network-wide cross-subnet capital flow over a 7d or 30d window: every subnet that moved stake in the window ranked by net StakeAdded minus StakeRemoved TAO (subnets with no stake events in the window are excluded), with per-subnet staked/unstaked/net/gross totals + a direction label, a network rollup, and a distribution of the per-subnet net flow, computed live from the account_events stake stream at /api/v1/chain/stake-flow (no static file).",
+    "ChainStakeFlowArtifact",
   ),
   artifact(
     "chain-fees",
@@ -2244,10 +2250,10 @@ export const API_ROUTES = [
     "GET",
     "/api/v1/blocks",
     "/metagraph/blocks.json",
-    "Fetch the recent-block feed (newest first) for the block explorer; ?limit (<=100) / ?offset, or ?cursor= for stable keyset paging under head-of-chain inserts (#1851). A conjunctive (AND-ed) filter set (#1991) narrows the feed: ?author=<ss58>, ?spec_version=<n>, ?from / ?to (observed_at epoch-ms), ?block_start / ?block_end (height range), ?min_extrinsics / ?min_events (non-empty blocks). Computed live from the first-party blocks D1 tier (#1345).",
+    "Fetch the recent-block feed (newest first) for the block explorer; ?limit (<=100) / ?offset, or ?cursor= for stable keyset paging under head-of-chain inserts (#1851). A conjunctive (AND-ed) filter set (#1991) narrows the feed: ?author=<ss58>, ?spec_version=<n>, ?from / ?to (observed_at epoch-ms), ?block_start / ?block_end (height range), ?min_extrinsics / ?min_events (non-empty blocks). Pass ?format=csv to download the filtered block rows as CSV. Computed live from the first-party blocks D1 tier (#1345).",
     "short",
     ["blocks", "analytics"],
-    [
+    csvRouteQuery([
       { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
       { name: "offset", schema: { type: "integer", minimum: 0 } },
       { name: "cursor", schema: { type: "string" } },
@@ -2259,7 +2265,7 @@ export const API_ROUTES = [
       { name: "block_end", schema: { type: "integer", minimum: 0 } },
       { name: "min_extrinsics", schema: { type: "integer", minimum: 0 } },
       { name: "min_events", schema: { type: "integer", minimum: 0 } },
-    ],
+    ]),
     [],
   ),
   route(
@@ -2399,7 +2405,18 @@ export const API_ROUTES = [
     "Fetch daily network-activity aggregates (extrinsic/event/block counts, success rate, unique signers) over a 7d or 30d window, newest day first. Computed live from the first-party chain D1 tiers (#1987); schema-stable day_count:0/days:[] when the store is cold.",
     "short",
     ["chain", "analytics"],
-    [{ name: "window", schema: { type: "string", enum: ["7d", "30d"] } }],
+    {
+      csvResponse: true,
+      parameters: [
+        { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
+        {
+          name: "format",
+          description:
+            "Response format override. Use `csv` to download the daily activity series as text/csv; `json` (default) keeps the response envelope.",
+          schema: { type: "string", enum: ["json", "csv"] },
+        },
+      ],
+    },
     [],
   ),
   route(
@@ -2410,15 +2427,27 @@ export const API_ROUTES = [
     "Fetch the extrinsic call-mix breakdown (count + share per call_module, or call_module/call_function with group_by=module_function) over a 7d or 30d window, optionally scoped to one pallet with ?call_module=. When scoped, total_extrinsics and share use the scoped module denominator. Computed live from the first-party extrinsics D1 tier (#1989); schema-stable call_count:0/calls:[] when cold.",
     "short",
     ["chain", "analytics"],
-    [
-      { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
-      {
-        name: "group_by",
-        schema: { type: "string", enum: ["module", "module_function"] },
-      },
-      { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
-      { name: "call_module", schema: { type: "string", maxLength: 100 } },
-    ],
+    {
+      csvResponse: true,
+      parameters: [
+        { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
+        {
+          name: "group_by",
+          schema: { type: "string", enum: ["module", "module_function"] },
+        },
+        {
+          name: "limit",
+          schema: { type: "integer", minimum: 1, maximum: 100 },
+        },
+        { name: "call_module", schema: { type: "string", maxLength: 100 } },
+        {
+          name: "format",
+          description:
+            "Response format override. Use `csv` to download the call-mix rows as text/csv; `json` (default) keeps the response envelope.",
+          schema: { type: "string", enum: ["json", "csv"] },
+        },
+      ],
+    },
     [],
   ),
   route(
@@ -2429,15 +2458,27 @@ export const API_ROUTES = [
     "Fetch the windowed most-active-account leaderboard (signers ranked by ?sort=tx_count or ?sort=total_fee_tao, with total fees/tips + newest signed block) over a 7d or 30d window, optionally scoped to one pallet with ?call_module=. Computed live from the first-party extrinsics D1 tier (#1990); schema-stable signer_count:0/signers:[] when cold.",
     "short",
     ["chain", "analytics"],
-    [
-      { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
-      {
-        name: "sort",
-        schema: { type: "string", enum: ["tx_count", "total_fee_tao"] },
-      },
-      { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
-      { name: "call_module", schema: { type: "string", maxLength: 100 } },
-    ],
+    {
+      csvResponse: true,
+      parameters: [
+        { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
+        {
+          name: "sort",
+          schema: { type: "string", enum: ["tx_count", "total_fee_tao"] },
+        },
+        {
+          name: "limit",
+          schema: { type: "integer", minimum: 1, maximum: 100 },
+        },
+        { name: "call_module", schema: { type: "string", maxLength: 100 } },
+        {
+          name: "format",
+          description:
+            "Response format override. Use `csv` to download the signer leaderboard as text/csv; `json` (default) keeps the response envelope.",
+          schema: { type: "string", enum: ["json", "csv"] },
+        },
+      ],
+    },
     [],
   ),
   route(
@@ -2473,6 +2514,20 @@ export const API_ROUTES = [
     [],
   ),
   route(
+    "chain-stake-flow",
+    "GET",
+    "/api/v1/chain/stake-flow",
+    "/metagraph/chain/stake-flow.json",
+    "Fetch network-wide cross-subnet capital flow over a 7d or 30d window: every subnet that moved stake in the window ranked by net StakeAdded minus StakeRemoved TAO (subnets with no stake events in the window are excluded) (biggest net inflow first, ?limit <=100), with per-subnet staked/unstaked/net/gross totals and a direction label, a network rollup, and a distribution (count, mean, min, p25, median, p75, p90, max) of the per-subnet net flow. Computed live from the account_events stake stream; schema-stable zeros + empty leaderboard when cold.",
+    "short",
+    ["chain", "analytics"],
+    [
+      { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
+      { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
+    ],
+    [],
+  ),
+  route(
     "chain-fees",
     "GET",
     "/api/v1/chain/fees",
@@ -2480,11 +2535,23 @@ export const API_ROUTES = [
     "Fetch fee/tip market analytics — a per-UTC-day fee series (totals, averages, and exact ordered-offset medians) plus a windowed top-fee-payer list — over a 7d or 30d window, optionally scoped to one pallet with ?call_module=. Computed live from the first-party extrinsics D1 tier (#1988); schema-stable day_count:0 + empty lists when cold.",
     "short",
     ["chain", "analytics"],
-    [
-      { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
-      { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
-      { name: "call_module", schema: { type: "string", maxLength: 100 } },
-    ],
+    {
+      csvResponse: true,
+      parameters: [
+        { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
+        {
+          name: "limit",
+          schema: { type: "integer", minimum: 1, maximum: 100 },
+        },
+        { name: "call_module", schema: { type: "string", maxLength: 100 } },
+        {
+          name: "format",
+          description:
+            "Response format override. Use `csv` to download the daily fee series as text/csv; `json` (default) keeps the response envelope (which also carries top_fee_payers).",
+          schema: { type: "string", enum: ["json", "csv"] },
+        },
+      ],
+    },
     [],
   ),
   route(
@@ -3316,6 +3383,37 @@ function csvExampleForRoute(entry) {
     return [
       "extrinsic_id,block_number,signer,call_module,call_function,success",
       "8454388-2,8454388,5Signer,SubtensorModule,add_stake,true",
+    ].join("\r\n");
+  }
+  if (entry.id === "chain-activity") {
+    return [
+      "day,block_count,extrinsic_count,event_count,successful_extrinsics,success_rate,unique_signers",
+      "2026-07-01,7200,15000,42000,14950,0.9967,320",
+    ].join("\r\n");
+  }
+  if (entry.id === "chain-calls") {
+    // Default grouping (group_by=module) omits call_function; add ?group_by=
+    // module_function for the call_module,call_function,count,share shape.
+    return ["call_module,count,share", "SubtensorModule,8200,0.5467"].join(
+      "\r\n",
+    );
+  }
+  if (entry.id === "chain-signers") {
+    return [
+      "signer,tx_count,total_fee_tao,total_tip_tao,last_tx_block",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY,1200,3.42,0,8454388",
+    ].join("\r\n");
+  }
+  if (entry.id === "chain-fees") {
+    return [
+      "day,extrinsic_count,total_fee_tao,avg_fee_tao,median_fee_tao,total_tip_tao,avg_tip_tao,median_tip_tao",
+      "2026-07-01,15000,42.5,0.002833,0.0025,0,0,0",
+    ].join("\r\n");
+  }
+  if (entry.id === "blocks-feed") {
+    return [
+      "block_number,block_hash,parent_hash,author,extrinsic_count,event_count,spec_version,observed_at",
+      "8454388,0xblock,0xparent,5Author,3,12,204,2026-07-03T00:00:00.000Z",
     ].join("\r\n");
   }
   return "netuid,name\r\n7,Allways";

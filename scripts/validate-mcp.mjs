@@ -267,6 +267,11 @@ assert.ok(
 
 await callOk("get_agent_catalog", {});
 await callOk("get_agent_catalog", { netuid: 7 });
+const curationPage = await callOk("list_curation", { limit: 3 });
+assert.ok(
+  Array.isArray(curationPage.curation),
+  "list_curation must return curation[]",
+);
 await callOk("registry_summary", {});
 
 // Per-subnet gap artifacts are R2-only (review/gaps/{netuid}.json); the cold
@@ -503,6 +508,15 @@ assert.equal(
   accountStakeFlow.address,
   SS58,
   "get_account_stake_flow must echo the address",
+);
+const accountStakeFlowIn = await callOk("get_account_stake_flow", {
+  ss58: SS58,
+  direction: "in",
+});
+assert.equal(
+  accountStakeFlowIn.address,
+  SS58,
+  "get_account_stake_flow must accept the direction filter",
 );
 const accountBalance = await callOk("get_account_balance", { ss58: SS58 });
 assert.ok(

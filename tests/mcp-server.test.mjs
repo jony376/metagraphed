@@ -1318,6 +1318,47 @@ describe("MCP tools (injected deps)", () => {
     assert.equal(res.body.result.structuredContent.eligible_count, 0);
   });
 
+  test("list_curation returns filtered curation rows", async () => {
+    const deps = makeDeps({
+      "/metagraph/curation.json": {
+        generated_at: "2026-07-01T00:00:00.000Z",
+        curation: [
+          { netuid: 7, coverage_level: "probed", curation_level: "verified" },
+          { netuid: 31, coverage_level: "manifested" },
+        ],
+      },
+    });
+    const res = await callTool("list_curation", { netuid: 7 }, { deps });
+    const out = res.body.result.structuredContent;
+    assert.equal(out.returned, 1);
+    assert.equal(out.curation[0].netuid, 7);
+  });
+
+  test("list_curation reports not_found when the artifact is absent", async () => {
+    const res = await callTool("list_curation", {}, { deps: makeDeps() });
+    assert.equal(res.body.result.isError, true);
+    assert.match(
+      res.body.result.content[0].text,
+      /Curation snapshot unavailable/,
+    );
+  });
+
+  test("list_curation payload validates against its declared outputSchema", async () => {
+    const schema = listToolDefinitions().find(
+      (t) => t.name === "list_curation",
+    )?.outputSchema;
+    const deps = makeDeps({
+      "/metagraph/curation.json": {
+        generated_at: "2026-07-01T00:00:00.000Z",
+        notes: "ok",
+        curation: [{ netuid: 7, coverage_level: "probed" }],
+      },
+    });
+    const res = await callTool("list_curation", { limit: 1 }, { deps });
+    const validate = new Ajv2020({ strict: false }).compile(schema);
+    assert.ok(validate(res.body.result.structuredContent));
+  });
+
   test("registry_summary returns the summary artifact", async () => {
     const res = await callTool("registry_summary", {}, { deps });
     assert.equal(res.body.result.structuredContent.completeness, 0.42);
@@ -2695,6 +2736,43 @@ describe("MCP stake-flow and movers economics tools", () => {
     });
     assert.equal(res.body.result.isError, true);
     assert.match(res.body.result.content[0].text, /window must be one of/);
+  });
+
+  test("get_account_stake_flow narrows to one side with direction=in", async () => {
+    const capture = [];
+    const res = await callTool(
+      "get_account_stake_flow",
+      { ss58: SS58, window: "30d", direction: "in" },
+      {
+        env: stakeFlowD1(
+          [
+            {
+              netuid: 7,
+              event_kind: "StakeAdded",
+              total_tao: 200,
+              event_count: 4,
+              last_observed: 1_717_000_000_000,
+            },
+          ],
+          capture,
+        ),
+      },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.total_staked_tao, 200);
+    assert.equal(out.total_unstaked_tao, 0);
+    // direction=in binds only the StakeAdded kind, not StakeRemoved.
+    assert.ok(capture[0].params.includes("StakeAdded"));
+    assert.ok(!capture[0].params.includes("StakeRemoved"));
+  });
+
+  test("get_account_stake_flow rejects an unsupported direction", async () => {
+    const res = await callTool("get_account_stake_flow", {
+      ss58: SS58,
+      direction: "sideways",
+    });
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /direction must be one of/);
   });
 
   test("get_account_stake_flow degrades to zeros on cold D1", async () => {
