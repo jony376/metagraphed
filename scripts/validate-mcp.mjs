@@ -18,7 +18,11 @@ import {
   buildAnthropicToolSpecs,
   buildOpenAIToolSpecs,
 } from "../src/agent-tool-specs.mjs";
-import { artifactFilePath, createLocalArtifactEnv } from "./lib.mjs";
+import {
+  artifactFilePath,
+  createLocalArtifactEnv,
+  latestArtifactDate,
+} from "./lib.mjs";
 
 const env = createLocalArtifactEnv();
 const MCP_URL = "https://api.metagraph.sh/mcp";
@@ -347,6 +351,18 @@ assert.ok(
     Number.isInteger(economics.total),
   "get_economics must return subnets[] with pagination totals",
 );
+const profilesList = await callOk("list_profiles", { limit: 5 });
+assert.ok(
+  Array.isArray(profilesList.profiles) &&
+    profilesList.profiles.length <= 5 &&
+    Number.isInteger(profilesList.total),
+  "list_profiles must return profiles[] with pagination totals",
+);
+const subnetProfile = await callOk("get_subnet_profile", { netuid: 7 });
+assert.ok(
+  subnetProfile?.subnet?.netuid === 7 || subnetProfile?.profile,
+  "get_subnet_profile must return subnet profile detail for netuid 7",
+);
 
 // The trajectory/metagraph/validators/neuron tiers are D1-backed; this cold env
 // has no neurons DB, so each tool must degrade to its schema-stable empty
@@ -612,6 +628,21 @@ assert.ok(
     networkHealthCold.global &&
     Array.isArray(networkHealthCold.subnets),
   "get_network_health must return scope + global + subnets[] on cold KV",
+);
+const latestHealthHistoryDate = await latestArtifactDate("health/history");
+assert.ok(
+  latestHealthHistoryDate,
+  "validate:mcp requires a local health/history/YYYY-MM-DD.json artifact; run `npm run build` first",
+);
+const healthHistory = await callOk("get_health_history", {
+  date: latestHealthHistoryDate,
+  limit: 2,
+});
+assert.ok(
+  healthHistory.date === latestHealthHistoryDate &&
+    Array.isArray(healthHistory.surfaces) &&
+    healthHistory.surfaces.length <= 2,
+  "get_health_history must return date + surfaces[] for the staged snapshot",
 );
 const blockExtrinsicsCold = await callOk("list_block_extrinsics", {
   ref: "4200000",

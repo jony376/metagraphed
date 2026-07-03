@@ -63,6 +63,8 @@ export const R2_ONLY_PATTERNS = [
   // Per-subnet chain-event stream (#1345): account_events filtered by netuid at
   // /api/v1/subnets/{netuid}/events — live D1, never written as a file.
   /^subnets\/(?:\d+|\{netuid\})\/events\.json$/,
+  // Per-subnet event summary: computed live from account_events.
+  /^subnets\/(?:\d+|\{netuid\})\/event-summary\.json$/,
   // Account entity tiers (#1347): computed live from account_events + neurons at
   // /api/v1/accounts/{ss58}(/events|/subnets) — never written as files.
   /^accounts\/(?:[1-9A-HJ-NP-Za-km-z]{47,48}|\{ss58\})\.json$/,
@@ -99,12 +101,19 @@ export const R2_ONLY_PATTERNS = [
   /^chain\/signers\.json$/,
   /^chain\/fees\.json$/,
   /^chain\/transfers\.json$/,
+  /^chain\/transfer-pairs\.json$/,
   // Network-wide concentration aggregated across every subnet's neurons, computed
   // live from the neurons D1 tier at /api/v1/chain/concentration — never a file.
   /^chain\/concentration\.json$/,
   // Network-wide reward distribution & score spread, computed live from the
   // neurons D1 tier at /api/v1/chain/performance — never a file.
   /^chain\/performance\.json$/,
+  // Network-wide emission yield (return rate), computed live from the neurons D1
+  // tier at /api/v1/chain/yield — never a file.
+  /^chain\/yield\.json$/,
+  // Network-wide validator-set turnover across every subnet, computed live from the
+  // neuron_daily D1 rollup at /api/v1/chain/turnover — never a file.
+  /^chain\/turnover\.json$/,
   // Postgres-backed all-events tier (ADR 0013): the recent-events feed, the
   // per-block all-events list, and the activity-stats aggregate are served live
   // by the dedicated data Worker at /api/v1/chain-events* — never written as

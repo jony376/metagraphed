@@ -59,6 +59,10 @@ import {
   CHAIN_SIGNERS_SORTS,
   loadChainSigners,
 } from "../../src/chain-query-loaders.mjs";
+import {
+  CHAIN_TRANSFER_PAIR_SORTS,
+  loadChainTransferPairs,
+} from "../../src/chain-transfer-pairs.mjs";
 import { loadChainTransfers } from "../../src/chain-transfers.mjs";
 
 // Injected once from api.mjs (see configureAnalytics). The in-isolate memoized
@@ -333,6 +337,24 @@ export async function readNeuronsCacheStamp(env) {
   const rows = await d1All(
     env,
     "SELECT MAX(captured_at) AS captured_at FROM neurons",
+    [],
+  );
+  if (hasD1FallbackRows(rows)) return null;
+  const capturedAt = rows[0]?.captured_at;
+  return Number.isInteger(capturedAt) && capturedAt > 0
+    ? String(capturedAt)
+    : null;
+}
+
+// Edge-cache stamp for routes derived from the neuron_daily rollup (the daily-snapshot tier), NOT
+// the live `neurons` tier: reads MAX(captured_at) from neuron_daily so the stamp advances exactly
+// when a new daily snapshot lands, invalidating the cached artifact on that refresh rather than on
+// the more-frequent live-neurons cadence. Used by neuron_daily-derived network routes (e.g.
+// /chain/turnover) whose data source is neuron_daily, not neurons.
+export async function readNeuronDailyCacheStamp(env) {
+  const rows = await d1All(
+    env,
+    "SELECT MAX(captured_at) AS captured_at FROM neuron_daily",
     [],
   );
   if (hasD1FallbackRows(rows)) return null;
@@ -866,6 +888,60 @@ export async function handleChainTransfers(request, env, url, ctx = {}) {
       );
     },
     canonicalAnalyticsCacheRoute(url, ["limit"]),
+  );
+  return request.method === "HEAD"
+    ? new Response(null, { status: response.status, headers: response.headers })
+    : response;
+}
+
+// Network-wide native-TAO transfer-pair analytics: top sender -> receiver pairs by
+// volume or count over the window, from the same account_events Transfer feed as
+// /chain/transfers. Excludes malformed/self-transfer rows so every row represents
+// a real directed account corridor.
+export async function handleChainTransferPairs(request, env, url, ctx = {}) {
+  const { label, days, error } = analyticsWindow(url, ["limit", "sort"]);
+  if (error) return analyticsQueryError(error);
+  const sortError = validateEnumParam(url, "sort", CHAIN_TRANSFER_PAIR_SORTS);
+  if (sortError) return analyticsQueryError(sortError);
+  const { limit, error: limitError } = parseLimitParam(url, {
+    defaultLimit: 25,
+    maxLimit: 100,
+  });
+  if (limitError) return analyticsQueryError(limitError);
+  const sort = url.searchParams.get("sort") || "volume";
+
+  const cacheRequest =
+    request.method === "HEAD"
+      ? new Request(request, { method: "GET" })
+      : request;
+  const response = await withEdgeCache(
+    cacheRequest,
+    ctx,
+    env,
+    "chain-transfer-pairs",
+    async () => {
+      const meta = await readHealthMetaKv(env);
+      const data = await loadChainTransferPairs(d1Runner(env), {
+        windowLabel: label,
+        windowDays: days,
+        observedAt: meta?.last_run_at || null,
+        limit,
+        sort,
+      });
+      return envelopeResponse(
+        cacheRequest,
+        {
+          data,
+          meta: await analyticsMeta(
+            env,
+            "/metagraph/chain/transfer-pairs.json",
+            data.observed_at,
+          ),
+        },
+        "short",
+      );
+    },
+    canonicalAnalyticsCacheRoute(url, ["limit", "sort"]),
   );
   return request.method === "HEAD"
     ? new Response(null, { status: response.status, headers: response.headers })

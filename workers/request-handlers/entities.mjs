@@ -23,6 +23,7 @@ import {
   DAY_PATTERN,
   FEED_PAGINATION,
   parseDateRange,
+  parseLimitParam,
   parseNonNegativeIntParam,
   parsePagination,
 } from "../request-params.mjs";
@@ -61,10 +62,15 @@ import {
 } from "../../src/neuron-history.mjs";
 import {
   INGESTED_EVENT_KINDS,
+  DEFAULT_SUBNET_EVENT_SUMMARY_WINDOW,
+  SUBNET_EVENT_SUMMARY_RECENT_LIMIT_DEFAULT,
+  SUBNET_EVENT_SUMMARY_RECENT_LIMIT_MAX,
+  SUBNET_EVENT_SUMMARY_WINDOWS,
   buildAccountHistory,
   loadAccountSummary,
   loadAccountEvents,
   loadSubnetEvents,
+  loadSubnetEventSummary,
   loadAccountExtrinsics,
   loadAccountTransfers,
   loadAccountSubnets,
@@ -79,7 +85,11 @@ import {
   buildBlock,
   loadBlocks,
 } from "../../src/blocks.mjs";
-import { loadExtrinsics } from "../../src/extrinsics.mjs";
+import {
+  EXTRINSICS_CSV_COLUMNS,
+  extrinsicsToCsvRows,
+  loadExtrinsics,
+} from "../../src/extrinsics.mjs";
 import {
   loadBlockEvents,
   loadBlockExtrinsics,
@@ -94,6 +104,7 @@ import {
   parseConcentrationHistoryWindow,
 } from "../../src/concentration.mjs";
 import { loadChainPerformance } from "../../src/chain-performance.mjs";
+import { loadChainYield } from "../../src/chain-yield.mjs";
 import {
   PERFORMANCE_READ_COLUMNS,
   buildSubnetPerformance,
@@ -120,6 +131,13 @@ import {
   MOVERS_LIMIT_DEFAULT,
   MOVERS_LIMIT_MAX,
 } from "../../src/movers.mjs";
+import {
+  loadChainTurnover,
+  CHAIN_TURNOVER_WINDOWS,
+  DEFAULT_CHAIN_TURNOVER_WINDOW,
+  CHAIN_TURNOVER_LIMIT_DEFAULT,
+  CHAIN_TURNOVER_LIMIT_MAX,
+} from "../../src/chain-turnover.mjs";
 import { loadSubnetIdentityHistory } from "../../src/subnet-identity-history.mjs";
 
 const RESPONSE_FORMATS = ["json", "csv"];
@@ -173,7 +191,6 @@ const GLOBAL_VALIDATOR_CSV_COLUMNS = [
   "latest_block_number",
   "subnets",
 ];
-
 function validateResponseFormat(url) {
   const raw = url.searchParams.get("format");
   if (raw === null && !url.searchParams.has("format")) return null;
@@ -645,6 +662,30 @@ export async function handleChainPerformance(request, env, url) {
   );
 }
 
+// GET /api/v1/chain/yield: network-wide emission-yield (return rate) across EVERY
+// subnet's neurons — the aggregate network return (total emission / total stake),
+// the same split by validator vs miner role, and the p10–p90 spread of the
+// per-neuron emission/stake return, computed live from the neurons D1 tier. The
+// return-rate companion to /chain/performance. No params; a cold/absent store →
+// 200 with null blocks.
+export async function handleChainYield(request, env, url) {
+  const validationError = validateQueryParams(url, []);
+  if (validationError) return analyticsQueryError(validationError);
+  const data = await loadChainYield(d1Runner(env));
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: await metagraphMeta(
+        env,
+        "/metagraph/chain/yield.json",
+        data.captured_at,
+      ),
+    },
+    "short",
+  );
+}
+
 // Shared helper: build a canonical edge-cache key for any windowed route by
 // normalising the ?window= query parameter through the route-specific parse
 // function, so that an omitted window and an explicit default-value window map
@@ -731,6 +772,66 @@ export function canonicalSubnetMoversCachePath(url, request = null) {
     url,
     request,
     `${url.pathname}?window=${windowParam}&sort=${sortParam}&limit=${limit.value}`,
+  );
+}
+
+// Canonical edge-cache key for the network turnover route: window + limit collapsed to
+// their resolved defaults so ?window=30d and the bare path share one cached entry. Falls
+// back to the raw path+search when validation fails (the handler will 400 it anyway).
+export function canonicalChainTurnoverCachePath(url) {
+  const validationError = validateQueryParams(url, ["window", "limit"]);
+  if (validationError) return `${url.pathname}${url.search}`;
+  const windowParam =
+    url.searchParams.get("window") || DEFAULT_CHAIN_TURNOVER_WINDOW;
+  if (!Object.hasOwn(CHAIN_TURNOVER_WINDOWS, windowParam)) {
+    return `${url.pathname}${url.search}`;
+  }
+  const limit = parseBoundedIntParam(url, "limit", {
+    def: CHAIN_TURNOVER_LIMIT_DEFAULT,
+    min: 1,
+    max: CHAIN_TURNOVER_LIMIT_MAX,
+  });
+  if (limit.error) return `${url.pathname}${url.search}`;
+  return `${url.pathname}?window=${windowParam}&limit=${limit.value}`;
+}
+
+// GET /api/v1/chain/turnover?window=7d|30d|90d&limit=20: network-wide validator-set churn
+// across all subnets between the window's boundary neuron_daily snapshots — a per-subnet
+// turnover leaderboard plus a network rollup over the union validator set.
+export async function handleChainTurnover(request, env, url) {
+  const validationError = validateQueryParams(url, ["window", "limit"]);
+  if (validationError) return analyticsQueryError(validationError);
+  const windowParam =
+    url.searchParams.get("window") || DEFAULT_CHAIN_TURNOVER_WINDOW;
+  if (!Object.hasOwn(CHAIN_TURNOVER_WINDOWS, windowParam)) {
+    return analyticsQueryError({
+      parameter: "window",
+      message: unsupportedWindowMessage(windowParam, CHAIN_TURNOVER_WINDOWS),
+    });
+  }
+  const limit = parseBoundedIntParam(url, "limit", {
+    def: CHAIN_TURNOVER_LIMIT_DEFAULT,
+    min: 1,
+    max: CHAIN_TURNOVER_LIMIT_MAX,
+  });
+  if (limit.error) return analyticsQueryError(limit.error);
+  const data = await loadChainTurnover(d1Runner(env), {
+    windowLabel: windowParam,
+    limit: limit.value,
+  });
+  // neuron_daily-derived, so the meta reports the metagraph-snapshot source; generated_at
+  // is the end snapshot date (string), matching the movers/turnover routes.
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: await metagraphMeta(
+        env,
+        "/metagraph/chain/turnover.json",
+        data.end_date,
+      ),
+    },
+    "short",
   );
 }
 
@@ -1492,6 +1593,48 @@ export async function handleSubnetEvents(request, env, netuid, url) {
   );
 }
 
+// GET /api/v1/subnets/{netuid}/event-summary: compact windowed account_events
+// aggregates by kind/category plus a small newest-first evidence slice. This is
+// the dashboard-friendly companion to the raw /events feed.
+export async function handleSubnetEventSummary(request, env, netuid, url) {
+  const validationError = validateQueryParams(url, ["window", "limit"]);
+  if (validationError) return analyticsQueryError(validationError);
+  const windowLabel =
+    url.searchParams.get("window") ?? DEFAULT_SUBNET_EVENT_SUMMARY_WINDOW;
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      SUBNET_EVENT_SUMMARY_WINDOWS,
+      windowLabel,
+    )
+  ) {
+    return analyticsQueryError({
+      parameter: "window",
+      message: `window must be one of ${Object.keys(SUBNET_EVENT_SUMMARY_WINDOWS).join(", ")}.`,
+    });
+  }
+  const parsedLimit = parseLimitParam(url, {
+    defaultLimit: SUBNET_EVENT_SUMMARY_RECENT_LIMIT_DEFAULT,
+    maxLimit: SUBNET_EVENT_SUMMARY_RECENT_LIMIT_MAX,
+  });
+  if (parsedLimit.error) return analyticsQueryError(parsedLimit.error);
+  const data = await loadSubnetEventSummary(d1Runner(env), netuid, {
+    windowLabel,
+    limit: parsedLimit.limit,
+  });
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: await accountMeta(
+        env,
+        `/metagraph/subnets/${netuid}/event-summary.json`,
+        data.observed_at,
+      ),
+    },
+    "short",
+  );
+}
+
 export const BALANCE_RATE_LIMIT = { limit: 100, windowSeconds: 60 };
 
 // GET /api/v1/accounts/{ss58}/balance (#1818): live TAO balance (free+reserved)
@@ -1737,7 +1880,7 @@ export async function handleBlockEvents(request, env, ref, url) {
 // zero. Reuses the chain-events meta since the same first-party poller fills this
 // tier. The per-row shape is bound, never interpolated.
 export async function handleExtrinsics(request, env, url) {
-  const validationError = validateQueryParams(url, [
+  const validationError = validateEntityQuery(url, [
     "limit",
     "offset",
     "cursor",
@@ -1750,6 +1893,7 @@ export async function handleExtrinsics(request, env, url) {
     "block_end",
     "from",
     "to",
+    "format",
   ]);
   if (validationError) return analyticsQueryError(validationError);
   const { limit, offset, cursor } = parsePagination(url, BLOCK_PAGINATION);
@@ -1786,6 +1930,15 @@ export async function handleExtrinsics(request, env, url) {
     offset,
     cursor,
   });
+  if (csvRequested(url, request)) {
+    return csvResponse(
+      extrinsicsToCsvRows(data.extrinsics),
+      "extrinsics",
+      "short",
+      request,
+      EXTRINSICS_CSV_COLUMNS,
+    );
+  }
   return envelopeResponse(
     request,
     {
