@@ -45,6 +45,7 @@ import {
   handleExtrinsics,
   handleExtrinsic,
   canonicalSubnetHistoryCachePath,
+  canonicalSubnetConcentrationHistoryCachePath,
   canonicalSubnetTurnoverCachePath,
   canonicalSubnetStakeFlowCachePath,
   canonicalSubnetMoversCachePath,
@@ -924,14 +925,13 @@ describe("handleNeuronHistory", () => {
 
   test("returns CSV response when ?format=csv is requested", async () => {
     const { env } = dbWith({ neuronDailyUid: [neuronDailyRow()] });
+    const path = `/api/v1/subnets/${NETUID}/neurons/${UID}/history?window=7d&format=csv`;
     const res = await handleNeuronHistory(
-      req(`/api/v1/subnets/${NETUID}/neurons/${UID}/history`),
+      req(path),
       env,
       NETUID,
       UID,
-      url(
-        `/api/v1/subnets/${NETUID}/neurons/${UID}/history?window=7d&format=csv`,
-      ),
+      url(path),
     );
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("content-type"), "text/csv; charset=utf-8");
@@ -5284,6 +5284,27 @@ describe("canonicalSubnetHistoryCachePath", () => {
       ),
       "/api/v1/subnets/7/history?window=30d",
     );
+  });
+});
+
+describe("canonicalSubnetConcentrationHistoryCachePath", () => {
+  test("returns canonical key for valid window param", () => {
+    assert.equal(
+      canonicalSubnetConcentrationHistoryCachePath(
+        url("/api/v1/subnets/7/concentration/history?window=30d"),
+      ),
+      "/api/v1/subnets/7/concentration/history?window=30d",
+    );
+  });
+
+  test("preserves raw search when format is present (no CSV support on this route)", () => {
+    const raw = "/api/v1/subnets/7/concentration/history?format=json";
+    assert.equal(canonicalSubnetConcentrationHistoryCachePath(url(raw)), raw);
+  });
+
+  test("preserves raw search when format is combined with a valid window", () => {
+    const raw = "/api/v1/subnets/7/concentration/history?window=30d&format=json";
+    assert.equal(canonicalSubnetConcentrationHistoryCachePath(url(raw)), raw);
   });
 });
 

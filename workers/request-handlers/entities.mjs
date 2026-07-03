@@ -703,22 +703,26 @@ export async function handleChainPerformance(request, env, url) {
 // normalising the ?window= query parameter through the route-specific parse
 // function, so that an omitted window and an explicit default-value window map
 // to the same cache slot.
-function canonicalWindowedCachePath(url, parseWindow, request = null) {
+function canonicalWindowedCachePath(url, parseWindow) {
+  const validationError = validateQueryParams(url, ["window"]);
+  if (validationError) return `${url.pathname}${url.search}`;
+  const { label, error } = parseWindow(url.searchParams.get("window"));
+  if (error) return `${url.pathname}${url.search}`;
+  return `${url.pathname}?window=${encodeURIComponent(label)}`;
+}
+
+export function canonicalSubnetHistoryCachePath(url, request = null) {
   const validationError = validateQueryParams(url, ["window", "format"]);
   if (validationError) return `${url.pathname}${url.search}`;
   const formatError = validateResponseFormat(url);
   if (formatError) return `${url.pathname}${url.search}`;
-  const { label, error } = parseWindow(url.searchParams.get("window"));
+  const { label, error } = parseHistoryWindow(url.searchParams.get("window"));
   if (error) return `${url.pathname}${url.search}`;
   return csvCacheVariant(
     url,
     request,
     `${url.pathname}?window=${encodeURIComponent(label)}`,
   );
-}
-
-export function canonicalSubnetHistoryCachePath(url, request = null) {
-  return canonicalWindowedCachePath(url, parseHistoryWindow, request);
 }
 
 export function canonicalSubnetConcentrationHistoryCachePath(url) {

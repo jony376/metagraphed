@@ -1003,13 +1003,13 @@ export const PUBLIC_ARTIFACTS = [
   artifact(
     "subnet-neuron-history",
     "/metagraph/subnets/{netuid}/neurons/{uid}/history.json",
-    "Per-UID daily metagraph history (stake/trust/emission/rank over time) for one UID, served live from the neuron_daily D1 rollup tier at /api/v1/subnets/{netuid}/neurons/{uid}/history (no static file). Pass ?format=csv to download the per-day series as CSV.",
+    "Per-UID daily metagraph history (stake/trust/emission/rank over time) for one UID, served live from the neuron_daily D1 rollup tier at /api/v1/subnets/{netuid}/neurons/{uid}/history (no static file).",
     "NeuronHistoryArtifact",
   ),
   artifact(
     "subnet-history",
     "/metagraph/subnets/{netuid}/history.json",
-    "Per-subnet daily aggregate history (neuron/validator counts + stake/emission totals) for one subnet, served live from the neuron_daily D1 rollup tier at /api/v1/subnets/{netuid}/history (no static file). Pass ?format=csv to download the per-day series as CSV.",
+    "Per-subnet daily aggregate history (neuron/validator counts + stake/emission totals) for one subnet, served live from the neuron_daily D1 rollup tier at /api/v1/subnets/{netuid}/history (no static file).",
     "SubnetHistoryArtifact",
   ),
   artifact(
@@ -1033,7 +1033,7 @@ export const PUBLIC_ARTIFACTS = [
   artifact(
     "account-history",
     "/metagraph/accounts/{ss58}/history.json",
-    "Durable per-day activity series for one account (hotkey-keyed, newest day first), served live from the account_events_daily rollup at /api/v1/accounts/{ss58}/history (no static file). Pass ?format=csv to download the per-day series as CSV.",
+    "Durable per-day activity series for one account (hotkey-keyed, newest day first), served live from the account_events_daily rollup at /api/v1/accounts/{ss58}/history (no static file).",
     "AccountHistoryArtifact",
   ),
   artifact(
@@ -1171,7 +1171,7 @@ export const PUBLIC_ARTIFACTS = [
   artifact(
     "subnet-uptime",
     "/metagraph/subnets/{netuid}/uptime.json",
-    "Long-term daily uptime history per operational surface for one subnet (90d/1y window), served live from the surface_uptime_daily D1 rollup (no static file). Pass ?format=csv to download the per-surface per-day series as CSV.",
+    "Long-term daily uptime history per operational surface for one subnet (90d/1y window), served live from the surface_uptime_daily D1 rollup (no static file).",
     "UptimeArtifact",
   ),
   artifact(
