@@ -952,9 +952,7 @@ describe("handleNeuronHistory", () => {
       emptyEnv(),
       NETUID,
       UID,
-      url(
-        `/api/v1/subnets/${NETUID}/neurons/${UID}/history?format=csv`,
-      ),
+      url(`/api/v1/subnets/${NETUID}/neurons/${UID}/history?format=csv`),
     );
     assert.equal(res.status, 200);
     const lines = (await res.text()).split("\r\n");
@@ -968,9 +966,7 @@ describe("handleNeuronHistory", () => {
       emptyEnv(),
       NETUID,
       UID,
-      url(
-        `/api/v1/subnets/${NETUID}/neurons/${UID}/history?format=pdf`,
-      ),
+      url(`/api/v1/subnets/${NETUID}/neurons/${UID}/history?format=pdf`),
     );
     const body = await errorJson(res);
     assert.equal(res.status, 400);

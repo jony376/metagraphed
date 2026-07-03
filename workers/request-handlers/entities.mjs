@@ -470,7 +470,7 @@ export async function handleGlobalValidators(request, env, url) {
 // GET /api/v1/subnets/{netuid}/neurons/{uid}/history?window=7d|30d|90d|1y|all
 // Per-UID time series (one point per snapshot_date, newest first, bounded).
 export async function handleNeuronHistory(request, env, netuid, uid, url) {
-  const validationError = validateEntityQuery(url, ["window"]);
+  const validationError = validateEntityQuery(url, ["window", "format"]);
   if (validationError) return analyticsQueryError(validationError);
   const { label, days, error } = parseHistoryWindow(
     url.searchParams.get("window"),
@@ -517,7 +517,7 @@ export async function handleNeuronHistory(request, env, netuid, uid, url) {
 // Per-subnet daily aggregates over time (count + totals) for a history sparkline,
 // without shipping every UID's row.
 export async function handleSubnetHistory(request, env, netuid, url) {
-  const validationError = validateEntityQuery(url, ["window"]);
+  const validationError = validateEntityQuery(url, ["window", "format"]);
   if (validationError) return analyticsQueryError(validationError);
   const { label, days, error } = parseHistoryWindow(
     url.searchParams.get("window"),
@@ -1199,6 +1199,7 @@ export async function handleAccountHistory(request, env, ss58, url) {
     "limit",
     "offset",
     "cursor",
+    "format",
   ]);
   if (validationError) return analyticsQueryError(validationError);
   const range = parseDateRange(url);

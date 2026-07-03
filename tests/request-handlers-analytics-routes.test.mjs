@@ -447,12 +447,7 @@ describe("handleUptime", () => {
   });
 
   test("returns empty/header-only CSV when D1 is cold", async () => {
-    const res = await handleUptime(
-      req("/"),
-      {},
-      NETUID,
-      url("/?format=csv"),
-    );
+    const res = await handleUptime(req("/"), {}, NETUID, url("/?format=csv"));
     assert.equal(res.status, 200);
     const lines = (await res.text()).split("\r\n");
     assert.equal(lines.length, 1);
