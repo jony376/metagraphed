@@ -252,6 +252,8 @@ describe("history builders", () => {
         dailyRow({ block_number: -1 }),
         dailyRow({ block_number: 1.5 }),
         dailyRow({ block_number: "abc" }),
+        dailyRow({ block_number: "" }),
+        dailyRow({ block_number: " " }),
       ],
       7,
       3,
@@ -259,6 +261,8 @@ describe("history builders", () => {
     assert.equal(out.points[0].block_number, null);
     assert.equal(out.points[1].block_number, null);
     assert.equal(out.points[2].block_number, null);
+    assert.equal(out.points[3].block_number, null);
+    assert.equal(out.points[4].block_number, null);
   });
 
   test("buildNeuronHistory coerces string-typed captured_at cells to ISO timestamps", () => {
