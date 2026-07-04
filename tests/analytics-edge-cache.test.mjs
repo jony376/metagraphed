@@ -245,6 +245,39 @@ describe("analytics edge cache", () => {
     assert.equal(cache.store.size, 1);
   });
 
+  test("performance history canonicalizes equivalent window query strings before caching", async () => {
+    originalCaches = globalThis.caches;
+    const cache = mockCaches();
+    cache.install();
+    const queries = [];
+    const env = analyticsEnv(queries);
+    const variants = [
+      "https://api.metagraph.sh/api/v1/subnets/7/performance/history?window=90d",
+      "https://api.metagraph.sh/api/v1/subnets/7/performance/history?window=90d&",
+      "https://api.metagraph.sh/api/v1/subnets/7/performance/history?window=90d&&",
+    ];
+
+    const first = await handleRequest(new Request(variants[0]), env, ctx);
+    await Promise.resolve();
+    assert.equal(first.status, 200);
+    const queriesAfterMiss = queries.length;
+
+    for (const variant of variants.slice(1)) {
+      const hit = await handleRequest(new Request(variant), env, ctx);
+      assert.equal(hit.status, 200);
+    }
+
+    assert.equal(queries.length, queriesAfterMiss);
+    assert.deepEqual(cache.putKeys, [
+      expectedKey(
+        "subnet-performance-history",
+        "/api/v1/subnets/7/performance/history",
+        "?window=90d",
+      ),
+    ]);
+    assert.equal(cache.store.size, 1);
+  });
+
   test("turnover canonicalizes omitted and explicit default window to the same cache key", async () => {
     originalCaches = globalThis.caches;
     const cache = mockCaches();
@@ -460,6 +493,35 @@ describe("analytics edge cache", () => {
       expectedKey(
         "subnet-registrations",
         "/api/v1/subnets/7/registrations",
+        "?window=7d",
+      ),
+    ]);
+    assert.equal(cache.store.size, 1);
+  });
+
+  test("subnet axon-removals routes through the worker and caches at the default window", async () => {
+    originalCaches = globalThis.caches;
+    const cache = mockCaches();
+    cache.install();
+    const env = analyticsEnv([]);
+
+    // No ?window — the worker dispatches to handleSubnetAxonRemovals, which resolves the
+    // 7d default and caches under the canonical ?window=7d key.
+    const res = await handleRequest(
+      new Request("https://api.metagraph.sh/api/v1/subnets/7/axon-removals"),
+      env,
+      ctx,
+    );
+    await Promise.resolve();
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.data.netuid, 7);
+    assert.equal(body.data.window, "7d");
+    assert.equal(typeof body.data.distinct_removers, "number");
+    assert.deepEqual(cache.putKeys, [
+      expectedKey(
+        "subnet-axon-removals",
+        "/api/v1/subnets/7/axon-removals",
         "?window=7d",
       ),
     ]);

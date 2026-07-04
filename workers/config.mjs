@@ -45,6 +45,10 @@ export const SUBNET_CONCENTRATION_PATH_PATTERN =
 // rollup, no static file.
 export const SUBNET_CONCENTRATION_HISTORY_PATH_PATTERN =
   /^\/api\/v1\/subnets\/(\d+)\/concentration\/history$/;
+// Per-day performance history (reward-flow & trust trend) from the neuron_daily
+// rollup, no static file.
+export const SUBNET_PERFORMANCE_HISTORY_PATH_PATTERN =
+  /^\/api\/v1\/subnets\/(\d+)\/performance\/history$/;
 // Validator-set & registration turnover (churn) from the neuron_daily rollup,
 // no static file.
 export const SUBNET_TURNOVER_PATH_PATTERN =
@@ -72,6 +76,9 @@ export const SUBNET_STAKE_MOVES_PATH_PATTERN =
 // Neuron-registration activity over the window, live from account_events, no static file.
 export const SUBNET_REGISTRATIONS_PATH_PATTERN =
   /^\/api\/v1\/subnets\/(\d+)\/registrations$/;
+// Axon-removal activity over the window, live from account_events, no static file.
+export const SUBNET_AXON_REMOVALS_PATH_PATTERN =
+  /^\/api\/v1\/subnets\/(\d+)\/axon-removals$/;
 // Per-UID emission yield distribution over the current neurons snapshot, no static file.
 export const SUBNET_YIELD_PATH_PATTERN = /^\/api\/v1\/subnets\/(\d+)\/yield$/;
 // Reward-distribution + score-spread metrics over the current neurons snapshot

@@ -87,6 +87,7 @@ import {
   handleSubnetIdentityHistory,
   handleSubnetConcentration,
   handleSubnetConcentrationHistory,
+  handleSubnetPerformanceHistory,
   handleChainConcentration,
   handleChainPerformance,
   handleChainIdentityHistory,
@@ -94,6 +95,7 @@ import {
   handleChainYield,
   canonicalSubnetHistoryCachePath,
   canonicalSubnetConcentrationHistoryCachePath,
+  canonicalSubnetPerformanceHistoryCachePath,
   handleSubnetTurnover,
   canonicalSubnetTurnoverCachePath,
   handleSubnetStakeFlow,
@@ -110,6 +112,8 @@ import {
   canonicalSubnetStakeMovesCachePath,
   handleSubnetRegistrations,
   canonicalSubnetRegistrationsCachePath,
+  handleSubnetAxonRemovals,
+  canonicalSubnetAxonRemovalsCachePath,
   handleSubnetYield,
   handleSubnetPerformance,
   handleSubnetMovers,
@@ -304,6 +308,7 @@ import {
   TRAJECTORY_PATH_PATTERN,
   SUBNET_CONCENTRATION_PATH_PATTERN,
   SUBNET_CONCENTRATION_HISTORY_PATH_PATTERN,
+  SUBNET_PERFORMANCE_HISTORY_PATH_PATTERN,
   SUBNET_TURNOVER_PATH_PATTERN,
   SUBNET_STAKE_FLOW_PATH_PATTERN,
   SUBNET_WEIGHTS_PATH_PATTERN,
@@ -312,6 +317,7 @@ import {
   SUBNET_PROMETHEUS_PATH_PATTERN,
   SUBNET_STAKE_MOVES_PATH_PATTERN,
   SUBNET_REGISTRATIONS_PATH_PATTERN,
+  SUBNET_AXON_REMOVALS_PATH_PATTERN,
   SUBNET_YIELD_PATH_PATTERN,
   SUBNET_PERFORMANCE_PATH_PATTERN,
   TRENDS_PATH_PATTERN,
@@ -1408,6 +1414,26 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         canonicalSubnetConcentrationHistoryCachePath(resolved.url),
       );
     }
+    const performanceHistoryMatch =
+      SUBNET_PERFORMANCE_HISTORY_PATH_PATTERN.exec(resolved.url.pathname);
+    if (performanceHistoryMatch) {
+      // Per-day reward-flow & trust trend over the neuron_daily rollup, deterministic
+      // per cron snapshot — edge-cache like the sibling concentration/history route.
+      return withEdgeCache(
+        request,
+        ctx,
+        env,
+        "subnet-performance-history",
+        () =>
+          handleSubnetPerformanceHistory(
+            request,
+            env,
+            Number(performanceHistoryMatch[1]),
+            resolved.url,
+          ),
+        canonicalSubnetPerformanceHistoryCachePath(resolved.url),
+      );
+    }
     const concentrationMatch = SUBNET_CONCENTRATION_PATH_PATTERN.exec(
       resolved.url.pathname,
     );
@@ -1595,6 +1621,27 @@ export async function handleRequest(request, env = {}, ctx = {}) {
             resolved.url,
           ),
         canonicalSubnetRegistrationsCachePath(resolved.url),
+      );
+    }
+    const axonRemovalsMatch = SUBNET_AXON_REMOVALS_PATH_PATTERN.exec(
+      resolved.url.pathname,
+    );
+    if (axonRemovalsMatch) {
+      // Axon-removal activity summed live from account_events over the window —
+      // deterministic per request, edge-cache like the sibling stake-flow route.
+      return withEdgeCache(
+        request,
+        ctx,
+        env,
+        "subnet-axon-removals",
+        () =>
+          handleSubnetAxonRemovals(
+            request,
+            env,
+            Number(axonRemovalsMatch[1]),
+            resolved.url,
+          ),
+        canonicalSubnetAxonRemovalsCachePath(resolved.url),
       );
     }
     // Per-UID emission yield distribution over the current neurons snapshot — computed
@@ -2108,6 +2155,7 @@ function isMainnetOnlyApiPath(pathname) {
     SUBNET_IDENTITY_HISTORY_PATH_PATTERN.test(pathname) ||
     SUBNET_CONCENTRATION_PATH_PATTERN.test(pathname) ||
     SUBNET_CONCENTRATION_HISTORY_PATH_PATTERN.test(pathname) ||
+    SUBNET_PERFORMANCE_HISTORY_PATH_PATTERN.test(pathname) ||
     SUBNET_TURNOVER_PATH_PATTERN.test(pathname) ||
     SUBNET_STAKE_FLOW_PATH_PATTERN.test(pathname) ||
     SUBNET_YIELD_PATH_PATTERN.test(pathname) ||

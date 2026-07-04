@@ -3,7 +3,7 @@ import { ROUTE_CSV_EXAMPLES } from "./csv-route-examples.mjs";
 import { DOMAIN_TAGS } from "./domain-tags.mjs";
 import { sampleFromSchema } from "./openapi-sample.mjs";
 
-export const CONTRACT_VERSION = "2026-07-04.1";
+export const CONTRACT_VERSION = "2026-07-04.2";
 export const SCHEMA_VERSION = 1;
 // The API + artifacts are served from the api subdomain; the bare apex
 // (metagraph.sh) is the metagraphed-ui UI. PRIMARY_DOMAIN drives the OpenAPI
@@ -942,6 +942,12 @@ export const PUBLIC_ARTIFACTS = [
     "SubnetPerformanceArtifact",
   ),
   artifact(
+    "subnet-performance-history",
+    "/metagraph/subnets/{netuid}/performance/history.json",
+    "Per-day reward-flow & trust trend (incentive/dividends Gini, Nakamoto coefficient, top-10% share, plus trust/consensus/validator_trust mean & median) over a 7d/30d/90d window for one subnet, served live from the neuron_daily D1 rollup at /api/v1/subnets/{netuid}/performance/history (no static file). The reward-flow twin of /concentration/history.",
+    "SubnetPerformanceHistoryArtifact",
+  ),
+  artifact(
     "subnet-concentration-history",
     "/metagraph/subnets/{netuid}/concentration/history.json",
     "Per-day stake & emission concentration trend (Gini, Nakamoto coefficient, top-10% share) over a 7d/30d/90d window for one subnet, served live from the neuron_daily D1 rollup at /api/v1/subnets/{netuid}/concentration/history (no static file).",
@@ -988,6 +994,12 @@ export const PUBLIC_ARTIFACTS = [
     "/metagraph/subnets/{netuid}/registrations.json",
     "Neuron-registration activity for one subnet over a 7d or 30d window — the distinct registrants (hotkeys), NeuronRegistered event count, and average registrations per registrant — served live from the account_events NeuronRegistered stream at /api/v1/subnets/{netuid}/registrations (no static file). Raw registration demand, the account_events companion to the neuron_daily validator-set churn in /api/v1/subnets/{netuid}/turnover.",
     "SubnetRegistrationsArtifact",
+  ),
+  artifact(
+    "subnet-axon-removals",
+    "/metagraph/subnets/{netuid}/axon-removals.json",
+    "Axon-removal activity for one subnet over a 7d or 30d window — the distinct removers (hotkeys), AxonInfoRemoved event count, and average removals per remover — served live from the account_events AxonInfoRemoved stream at /api/v1/subnets/{netuid}/axon-removals (no static file). Raw axon-teardown activity, the removal-side companion to the AxonServed announcements in /api/v1/subnets/{netuid}/serving.",
+    "SubnetAxonRemovalsArtifact",
   ),
   artifact(
     "subnet-stake-flow",
@@ -1935,6 +1947,22 @@ export const API_ROUTES = [
     [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
   ),
   route(
+    "subnet-performance-history",
+    "GET",
+    "/api/v1/subnets/{netuid}/performance/history",
+    "/metagraph/subnets/{netuid}/performance/history.json",
+    "Fetch the per-day reward-flow & trust trend for one subnet over a 7d/30d/90d window: the incentive/dividends reward concentration (Gini, Nakamoto coefficient, top-10% share) plus the mean & median of the 0–1 trust, consensus, and validator_trust scores (computed live from the neuron_daily D1 rollup). The reward-flow twin of /concentration/history.",
+    "short",
+    ["subnets", "analytics"],
+    [
+      {
+        name: "window",
+        schema: { type: "string", enum: ["7d", "30d", "90d"] },
+      },
+    ],
+    [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
+  ),
+  route(
     "subnet-concentration-history",
     "GET",
     "/api/v1/subnets/{netuid}/concentration/history",
@@ -2028,6 +2056,17 @@ export const API_ROUTES = [
     "/api/v1/subnets/{netuid}/registrations",
     "/metagraph/subnets/{netuid}/registrations.json",
     "Fetch neuron-registration activity for one subnet over a 7d or 30d window: the distinct registrants (hotkeys), the NeuronRegistered event count, and the average registrations per registrant, computed live from the account_events NeuronRegistered stream. Raw registration demand — the account_events companion to the neuron_daily validator-set churn in GET /api/v1/subnets/{netuid}/turnover (net snapshot change, not raw event volume). Schema-stable zeroed card when the subnet has no NeuronRegistered events in the window.",
+    "short",
+    ["subnets", "analytics"],
+    [{ name: "window", schema: { type: "string", enum: ["7d", "30d"] } }],
+    [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
+  ),
+  route(
+    "subnet-axon-removals",
+    "GET",
+    "/api/v1/subnets/{netuid}/axon-removals",
+    "/metagraph/subnets/{netuid}/axon-removals.json",
+    "Fetch axon-removal activity for one subnet over a 7d or 30d window: the distinct removers (hotkeys), the AxonInfoRemoved event count, and the average removals per remover, computed live from the account_events AxonInfoRemoved stream. Raw axon-teardown activity — the removal-side companion to the AxonServed announcements in GET /api/v1/subnets/{netuid}/serving (which counts axon announcements, not teardowns). Schema-stable zeroed card when the subnet has no AxonInfoRemoved events in the window.",
     "short",
     ["subnets", "analytics"],
     [{ name: "window", schema: { type: "string", enum: ["7d", "30d"] } }],

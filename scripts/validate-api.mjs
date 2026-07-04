@@ -222,6 +222,14 @@ const checks = [
     },
   ],
   [
+    "/api/v1/subnets/7/performance/history?window=7d",
+    (body) => {
+      assert.equal(body.data.netuid, 7);
+      assert.equal(Array.isArray(body.data.points), true);
+      assert.equal(typeof body.data.point_count, "number");
+    },
+  ],
+  [
     "/api/v1/subnets/7/turnover?window=30d",
     (body) => {
       assert.equal(body.data.netuid, 7);
@@ -318,6 +326,20 @@ const checks = [
       assert.equal(
         body.data.registrations_per_registrant === null ||
           typeof body.data.registrations_per_registrant === "number",
+        true,
+      );
+    },
+  ],
+  [
+    "/api/v1/subnets/7/axon-removals?window=30d",
+    (body) => {
+      assert.equal(body.data.netuid, 7);
+      assert.equal(body.data.window, "30d");
+      assert.equal(typeof body.data.distinct_removers, "number");
+      assert.equal(typeof body.data.removals, "number");
+      assert.equal(
+        body.data.removals_per_remover === null ||
+          typeof body.data.removals_per_remover === "number",
         true,
       );
     },
