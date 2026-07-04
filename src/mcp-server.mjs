@@ -38,6 +38,12 @@ import {
   loadGlobalOperationalHealth,
 } from "./global-operational-health.mjs";
 import {
+  GET_COVERAGE_INSTRUCTIONS,
+  GET_COVERAGE_MCP_TOOL,
+  GET_COVERAGE_OUTPUT_SCHEMA,
+  loadRegistryCoverage,
+} from "./registry-coverage.mjs";
+import {
   GET_SUBNET_PROFILE_MCP_TOOL,
   GET_SUBNET_PROFILE_OUTPUT_SCHEMA,
   LIST_PROFILES_INSTRUCTIONS,
@@ -158,6 +164,11 @@ import { loadChainPerformance } from "./chain-performance.mjs";
 import { loadChainYield } from "./chain-yield.mjs";
 import { loadBlocksSummary } from "./blocks-summary.mjs";
 import {
+  CHAIN_IDENTITY_HISTORY_LIMIT_DEFAULT,
+  CHAIN_IDENTITY_HISTORY_LIMIT_MAX,
+  loadChainIdentityHistory,
+} from "./chain-identity-history.mjs";
+import {
   loadSubnetStakeFlow,
   STAKE_FLOW_WINDOWS,
   DEFAULT_STAKE_FLOW_WINDOW,
@@ -215,7 +226,7 @@ const MCP_LATEST_PROTOCOL = MCP_PROTOCOL_VERSIONS[0];
 //   - change or remove a tool's I/O       → MAJOR
 //   - behavioral-only fix (no I/O change) → PATCH
 // Reported in serverInfo.version (initialize) + the generated server-card.json.
-export const MCP_SERVER_VERSION = "1.23.0";
+export const MCP_SERVER_VERSION = "1.24.0";
 
 // Window labels accepted by get_chain_transfers — derived from the loader constant
 // so input/output schemas and runtime validation cannot drift.
@@ -269,6 +280,7 @@ export const MCP_INSTRUCTIONS =
   "language answer with citations; get_subnet / get_subnet_health for detail, " +
   "list_subnet_apis + get_api_schema to integrate a subnet's API, and " +
   "get_best_rpc_endpoint for a live-healthy Bittensor base-layer RPC endpoint. " +
+  GET_COVERAGE_INSTRUCTIONS +
   LIST_CURATION_INSTRUCTIONS +
   "Use list_enrichment_targets to plan coverage-depth work across schemas, " +
   "fixtures, examples, provenance, and candidate-review gaps, and " +
@@ -326,7 +338,8 @@ export const MCP_INSTRUCTIONS =
   "native-TAO transfer volume plus top senders/receivers, get_chain_concentration " +
   "the network-wide stake/emission decentralization scorecard across all subnets, " +
   "get_chain_performance the network-wide reward-distribution and trust/consensus " +
-  "score spread across all subnets, " +
+  "score spread across all subnets, get_chain_identity_history the network-wide " +
+  "recent subnet-identity-change feed across all subnets, " +
   "get_chain_yield the network-wide emission-yield (return rate) and its " +
   "distribution across all subnets, " +
   "get_blocks_summary block-production analytics (inter-block time, throughput, " +
@@ -1939,6 +1952,37 @@ export const MCP_TOOLS = [
     },
     async handler(_args, ctx) {
       return loadChainPerformance(mcpD1Runner(ctx));
+    },
+  },
+  {
+    name: "get_chain_identity_history",
+    title: "Get network-wide subnet-identity-change feed",
+    description:
+      "Fetch the network-wide recent subnet-identity-change feed aggregated " +
+      "across ALL subnets (newest first): the most-recent SubnetIdentitiesV3 " +
+      "changes, each carrying the netuid it belongs to plus the same tracked " +
+      "identity fields (name, symbol, description, links, hash) as the per-subnet " +
+      "identity-history, capped to `limit` (default " +
+      `${CHAIN_IDENTITY_HISTORY_LIMIT_DEFAULT}, max ${CHAIN_IDENTITY_HISTORY_LIMIT_MAX}` +
+      ") and reporting the distinct subnet_count the feed spans. The network-level " +
+      "companion of get_subnet_identity_history. Mirrors GET " +
+      "/api/v1/chain/identity-history.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "integer",
+          description: `Max changes to return (1-${CHAIN_IDENTITY_HISTORY_LIMIT_MAX}, default ${CHAIN_IDENTITY_HISTORY_LIMIT_DEFAULT}).`,
+          minimum: 1,
+          maximum: CHAIN_IDENTITY_HISTORY_LIMIT_MAX,
+        },
+      },
+      additionalProperties: false,
+    },
+    async handler(args, ctx) {
+      return loadChainIdentityHistory(mcpD1Runner(ctx), {
+        limit: args?.limit,
+      });
     },
   },
   {
@@ -4372,6 +4416,12 @@ export const MCP_TOOLS = [
     },
   },
   {
+    ...GET_COVERAGE_MCP_TOOL,
+    async handler(_args, ctx) {
+      return loadRegistryCoverage(ctx);
+    },
+  },
+  {
     name: "list_enrichment_targets",
     title: "List ranked enrichment targets",
     description:
@@ -5408,6 +5458,29 @@ const TOOL_OUTPUT_SCHEMAS = {
       validator_trust: { type: ["object", "null"] },
     },
   },
+  get_chain_identity_history: {
+    type: "object",
+    additionalProperties: true,
+    required: ["schema_version", "count", "subnet_count", "changes"],
+    properties: {
+      schema_version: { type: "integer" },
+      count: { type: "integer" },
+      subnet_count: { type: "integer" },
+      changes: objectItems({
+        netuid: NULLABLE_INT,
+        block_number: NULLABLE_INT,
+        observed_at: NULLABLE_STRING,
+        subnet_name: NULLABLE_STRING,
+        symbol: NULLABLE_STRING,
+        description: NULLABLE_STRING,
+        github_repo: NULLABLE_STRING,
+        subnet_url: NULLABLE_STRING,
+        discord: NULLABLE_STRING,
+        logo_url: NULLABLE_STRING,
+        identity_hash: NULLABLE_STRING,
+      }),
+    },
+  },
   get_chain_yield: {
     type: "object",
     additionalProperties: true,
@@ -6399,6 +6472,7 @@ const TOOL_OUTPUT_SCHEMAS = {
       generated_at: NULLABLE_STRING,
     },
   },
+  get_coverage: GET_COVERAGE_OUTPUT_SCHEMA,
   list_enrichment_targets: {
     type: "object",
     additionalProperties: true,

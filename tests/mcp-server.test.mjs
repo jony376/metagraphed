@@ -1364,6 +1364,28 @@ describe("MCP tools (injected deps)", () => {
     assert.equal(res.body.result.structuredContent.completeness, 0.42);
   });
 
+  test("get_coverage returns the coverage artifact", async () => {
+    const coverageDeps = makeDeps({
+      "/metagraph/coverage.json": {
+        surface_count: 99,
+        completeness: { average_score: 55 },
+      },
+    });
+    const res = await callTool("get_coverage", {}, { deps: coverageDeps });
+    const out = res.body.result.structuredContent;
+    assert.equal(out.surface_count, 99);
+    assert.equal(out.completeness.average_score, 55);
+  });
+
+  test("get_coverage reports not_found when the artifact is absent", async () => {
+    const res = await callTool("get_coverage", {}, { deps: makeDeps() });
+    assert.equal(res.body.result.isError, true);
+    assert.match(
+      res.body.result.content[0].text,
+      /No resource at the requested/,
+    );
+  });
+
   test("list_enrichment_targets returns ranked coverage-depth targets", async () => {
     const res = await callTool(
       "list_enrichment_targets",
@@ -5995,6 +6017,77 @@ describe("MCP economics + metagraph data tools", () => {
     assert.equal(out.trust.count, 2);
     assert.equal(out.trust.max, 0.9);
     assert.equal(out.validator_trust.count, 1);
+  });
+
+  test("get_chain_identity_history returns a schema-stable empty feed on cold D1", async () => {
+    const res = await callTool("get_chain_identity_history", {});
+    const out = res.body.result.structuredContent;
+    assert.equal(out.schema_version, 1);
+    assert.equal(out.count, 0);
+    assert.equal(out.subnet_count, 0);
+    assert.deepEqual(out.changes, []);
+  });
+
+  test("get_chain_identity_history summarizes recent changes across subnets", async () => {
+    const identityDb = {
+      prepare(sql) {
+        return {
+          bind(...params) {
+            return {
+              all() {
+                if (sql.includes("FROM subnet_identity_history")) {
+                  assert.equal(params[params.length - 1], 2); // clamped limit bound
+                  return Promise.resolve({
+                    results: [
+                      {
+                        id: 2,
+                        netuid: 12,
+                        block_number: 200,
+                        observed_at: 1_700_000_000_000,
+                        subnet_name: "Beta",
+                        symbol: "β",
+                        description: null,
+                        github_repo: null,
+                        subnet_url: null,
+                        discord: null,
+                        logo_url: null,
+                        identity_hash: "h2",
+                      },
+                      {
+                        id: 1,
+                        netuid: 7,
+                        block_number: 100,
+                        observed_at: 1_600_000_000_000,
+                        subnet_name: "Alpha",
+                        symbol: "α",
+                        description: null,
+                        github_repo: null,
+                        subnet_url: null,
+                        discord: null,
+                        logo_url: null,
+                        identity_hash: "h1",
+                      },
+                    ],
+                  });
+                }
+                return Promise.resolve({ results: [] });
+              },
+            };
+          },
+        };
+      },
+    };
+    const res = await callTool(
+      "get_chain_identity_history",
+      { limit: 2 },
+      { env: { METAGRAPH_HEALTH_DB: identityDb } },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.count, 2);
+    assert.equal(out.subnet_count, 2); // spans netuids 12 and 7
+    assert.equal(out.changes[0].netuid, 12);
+    assert.equal(out.changes[0].subnet_name, "Beta");
+    assert.equal(out.changes[1].netuid, 7);
   });
 
   test("get_chain_yield returns schema-stable null blocks on cold D1", async () => {

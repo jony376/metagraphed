@@ -196,6 +196,35 @@ describe("computeMovers", () => {
     assert.equal(m[0].stake_delta_tao, 50);
   });
 
+  test("skips rows with a null or blank netuid instead of coercing to subnet 0", () => {
+    const m = computeMovers(
+      [
+        agg(0, "s", { neurons: 1, validators: 0, stake: 10, emission: 0 }),
+        {
+          netuid: null,
+          snapshot_date: "s",
+          neuron_count: 5,
+          validator_count: 0,
+          total_stake_tao: 99,
+          total_emission_tao: 0,
+        },
+        {
+          netuid: "  ",
+          snapshot_date: "s",
+          neuron_count: 3,
+          validator_count: 0,
+          total_stake_tao: 88,
+          total_emission_tao: 0,
+        },
+      ],
+      [agg(0, "e", { neurons: 1, validators: 0, stake: 20, emission: 0 })],
+      { sort: "stake" },
+    );
+    assert.equal(m.length, 1);
+    assert.equal(m[0].netuid, 0);
+    assert.equal(m[0].stake_start_tao, 10);
+  });
+
   test("non-array inputs yield an empty ranking", () => {
     assert.deepEqual(computeMovers(null, undefined, { sort: "stake" }), []);
   });

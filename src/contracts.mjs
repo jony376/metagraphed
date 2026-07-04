@@ -1194,6 +1194,12 @@ export const PUBLIC_ARTIFACTS = [
     "ChainPerformanceArtifact",
   ),
   artifact(
+    "chain-identity-history",
+    "/metagraph/chain/identity-history.json",
+    "Network-wide recent subnet-identity-change feed (newest first) aggregated across all subnets: the most-recent SubnetIdentitiesV3 changes, each carrying the netuid it belongs to plus the same tracked identity fields as the per-subnet identity-history route, capped to a ?limit (default 50, max 200) and reporting the distinct subnet_count the feed spans, computed live from the subnet_identity_history D1 tier at /api/v1/chain/identity-history (no static file).",
+    "ChainIdentityHistoryArtifact",
+  ),
+  artifact(
     "chain-yield",
     "/metagraph/chain/yield.json",
     "Network-wide emission-yield (return rate) aggregated across all subnets' neurons: the aggregate network return (total emission / total stake), the same split by validator vs miner role, and the count/mean/median/min/max plus p10–p90 spread of the per-neuron emission/stake return, and the subnet_count the snapshot spans — the return-rate companion to chain-performance, computed live from the neurons D1 tier at /api/v1/chain/yield (no static file).",
@@ -2592,6 +2598,17 @@ export const API_ROUTES = [
     "short",
     ["chain", "analytics"],
     [],
+    [],
+  ),
+  route(
+    "chain-identity-history",
+    "GET",
+    "/api/v1/chain/identity-history",
+    "/metagraph/chain/identity-history.json",
+    "Fetch the network-wide recent subnet-identity-change feed (newest first) aggregated across all subnets: the most-recent SubnetIdentitiesV3 changes, each carrying the netuid it belongs to plus the same tracked identity fields as the per-subnet identity-history route, capped to ?limit (default 50, max 200) and reporting the distinct subnet_count the feed spans, computed live from the subnet_identity_history D1 tier; schema-stable empty feed when cold.",
+    "short",
+    ["chain", "analytics"],
+    [{ name: "limit", schema: { type: "integer", minimum: 1, maximum: 200 } }],
     [],
   ),
   route(

@@ -36,14 +36,26 @@ export async function loadExtrinsicDetail(d1, ref) {
 
   const resolved = rows[0];
   let events = [];
-  if (
-    resolved &&
-    resolved.block_number != null &&
-    resolved.extrinsic_index != null
-  ) {
+  const rawBlock = resolved?.block_number;
+  const rawIndex = resolved?.extrinsic_index;
+  const blockNumber =
+    rawBlock == null || (typeof rawBlock === "string" && rawBlock.trim() === "")
+      ? null
+      : (() => {
+          const n = Number(rawBlock);
+          return Number.isInteger(n) && n >= 0 ? n : null;
+        })();
+  const extrinsicIndex =
+    rawIndex == null || (typeof rawIndex === "string" && rawIndex.trim() === "")
+      ? null
+      : (() => {
+          const n = Number(rawIndex);
+          return Number.isInteger(n) && n >= 0 ? n : null;
+        })();
+  if (blockNumber != null && extrinsicIndex != null) {
     const eventRows = await d1(
       `SELECT ${ACCOUNT_EVENT_COLUMNS} FROM account_events WHERE block_number = ? AND extrinsic_index = ? ORDER BY event_index ASC LIMIT ?`,
-      [resolved.block_number, resolved.extrinsic_index, MAX_EMBEDDED_EVENTS],
+      [blockNumber, extrinsicIndex, MAX_EMBEDDED_EVENTS],
     );
     events = (eventRows || []).map(formatAccountEvent).filter(Boolean);
   }

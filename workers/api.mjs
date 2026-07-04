@@ -61,6 +61,7 @@ import {
   withEdgeCache,
   withNeuronsEdgeCache,
   readNeuronsCacheStamp,
+  readIdentityHistoryCacheStamp,
   readNeuronDailyCacheStamp,
 } from "./request-handlers/analytics.mjs";
 import {
@@ -82,6 +83,8 @@ import {
   handleSubnetConcentrationHistory,
   handleChainConcentration,
   handleChainPerformance,
+  handleChainIdentityHistory,
+  canonicalChainIdentityHistoryCachePath,
   handleChainYield,
   canonicalSubnetHistoryCachePath,
   canonicalSubnetConcentrationHistoryCachePath,
@@ -1764,6 +1767,22 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         (edgeEnv) => readNeuronsCacheStamp(edgeEnv),
       );
     }
+    // GET /api/v1/chain/identity-history: network-wide recent subnet-identity-change
+    // feed across ALL subnets (newest first) — edge-cache busts on the newest
+    // identity change's observed_at; ?limit rides the canonical cache path so a bare
+    // request and an explicit-default request share one slot (like chain/performance
+    // but a capped feed, not a per-subnet aggregate).
+    if (resolved.url.pathname === "/api/v1/chain/identity-history") {
+      return withEdgeCache(
+        request,
+        ctx,
+        env,
+        "chain-identity-history",
+        () => handleChainIdentityHistory(request, env, resolved.url),
+        canonicalChainIdentityHistoryCachePath(resolved.url),
+        (edgeEnv) => readIdentityHistoryCacheStamp(edgeEnv),
+      );
+    }
     // GET /api/v1/chain/yield: network-wide emission-yield (return rate) aggregate
     // — edge-cache busts on the newest neuron captured_at across ALL subnets (like
     // chain/performance, but the emission/stake return-rate lens).
@@ -1858,6 +1877,7 @@ function isMainnetOnlyApiPath(pathname) {
     pathname === "/api/v1/chain/stake-flow" ||
     pathname === "/api/v1/chain/concentration" ||
     pathname === "/api/v1/chain/performance" ||
+    pathname === "/api/v1/chain/identity-history" ||
     pathname === "/api/v1/chain/yield" ||
     pathname === "/api/v1/chain/turnover" ||
     pathname === "/api/v1/blocks/summary" ||
@@ -2755,6 +2775,9 @@ async function handleApiRequest(
       request,
       transformed.meta.projection?.fields,
       linkValue ? { link: linkValue } : {},
+      {
+        stream: matched.id === "endpoints" || matched.id === "subnet-endpoints",
+      },
     );
   }
   // Real publish time from the KV latest pointer (null until a publish has

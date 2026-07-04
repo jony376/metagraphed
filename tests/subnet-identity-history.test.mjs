@@ -692,6 +692,38 @@ describe("recordSubnetIdentityChanges", () => {
     assert.equal(binds[0]?.[1], 8_404_076);
   });
 
+  test("coerces D1 numeric-string block_number when recording changes", async () => {
+    const binds = [];
+    const db = {
+      prepare(sql) {
+        return {
+          bind(...args) {
+            if (/INSERT INTO subnet_identity_history/.test(sql)) {
+              binds.push(args);
+            }
+            return this;
+          },
+          all: async () => {
+            if (/FROM blocks/.test(sql)) {
+              return { results: [{ block_number: "8404076" }] };
+            }
+            return { results: [] };
+          },
+        };
+      },
+      batch: async () => {},
+    };
+    await recordSubnetIdentityChanges(
+      { METAGRAPH_HEALTH_DB: db },
+      {
+        profiles: [{ netuid: 7, native_identity: { subnet_name: "First" } }],
+        db,
+      },
+    );
+    assert.equal(binds[0]?.[1], 8_404_076);
+    assert.equal(typeof binds[0]?.[1], "number");
+  });
+
   test("batches large inserts in chunks of 100", async () => {
     let batches = 0;
     const db = {

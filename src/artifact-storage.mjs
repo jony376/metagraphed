@@ -114,6 +114,9 @@ export const R2_ONLY_PATTERNS = [
   // Network-wide reward distribution & score spread, computed live from the
   // neurons D1 tier at /api/v1/chain/performance — never a file.
   /^chain\/performance\.json$/,
+  // Network-wide recent subnet-identity-change feed, computed live from the
+  // subnet_identity_history D1 tier at /api/v1/chain/identity-history — never a file.
+  /^chain\/identity-history\.json$/,
   // Network-wide emission yield (return rate), computed live from the neurons D1
   // tier at /api/v1/chain/yield — never a file.
   /^chain\/yield\.json$/,

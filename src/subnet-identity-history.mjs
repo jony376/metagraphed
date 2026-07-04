@@ -162,7 +162,9 @@ async function latestBlockNumber(db) {
     const res = await db
       .prepare("SELECT MAX(block_number) AS block_number FROM blocks")
       .all();
-    const block = res?.results?.[0]?.block_number;
+    const raw = res?.results?.[0]?.block_number;
+    if (raw == null || raw === "") return null;
+    const block = Number(raw);
     return Number.isSafeInteger(block) && block > 0 ? block : null;
   } catch {
     return null;

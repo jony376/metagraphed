@@ -107,6 +107,11 @@ import {
 import { loadChainPerformance } from "../../src/chain-performance.mjs";
 import { loadChainYield } from "../../src/chain-yield.mjs";
 import {
+  CHAIN_IDENTITY_HISTORY_LIMIT_DEFAULT,
+  CHAIN_IDENTITY_HISTORY_LIMIT_MAX,
+  loadChainIdentityHistory,
+} from "../../src/chain-identity-history.mjs";
+import {
   PERFORMANCE_READ_COLUMNS,
   buildSubnetPerformance,
 } from "../../src/subnet-performance.mjs";
@@ -749,6 +754,37 @@ export async function handleChainPerformance(request, env, url) {
   );
 }
 
+// GET /api/v1/chain/identity-history: the most-recent SubnetIdentitiesV3 changes
+// aggregated across EVERY subnet (newest first), each entry shaped like the
+// per-subnet /identity-history route plus its `netuid`. The network analog of
+// handleSubnetIdentityHistory — a capped feed (`?limit` default 50, max 200), not a
+// per-subnet timeline. A cold/absent store → 200 with an empty feed (schema-stable,
+// never 404).
+export async function handleChainIdentityHistory(request, env, url) {
+  const validationError = validateQueryParams(url, ["limit"]);
+  if (validationError) return analyticsQueryError(validationError);
+  const { limit, error: limitError } = parseLimitParam(url, {
+    defaultLimit: CHAIN_IDENTITY_HISTORY_LIMIT_DEFAULT,
+    maxLimit: CHAIN_IDENTITY_HISTORY_LIMIT_MAX,
+  });
+  if (limitError) return analyticsQueryError(limitError);
+  const data = await loadChainIdentityHistory(d1Runner(env), { limit });
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: await metagraphMeta(
+        env,
+        "/metagraph/chain/identity-history.json",
+        // Freshness = the newest change's observed_at (feed is newest-first), else
+        // null when the store is cold.
+        data.changes[0]?.observed_at ?? null,
+      ),
+    },
+    "short",
+  );
+}
+
 // GET /api/v1/chain/yield: network-wide emission-yield (return rate) across EVERY
 // subnet's neurons — the aggregate network return (total emission / total stake),
 // the same split by validator vs miner role, and the p10–p90 spread of the
@@ -771,6 +807,21 @@ export async function handleChainYield(request, env, url) {
     },
     "short",
   );
+}
+
+// Canonical edge-cache key for the network identity-history feed: normalize `?limit`
+// (its only response-changing param) to the default when omitted so a bare request
+// and an explicit-default request share one cache slot; an invalid limit falls
+// through to the raw search so the handler surfaces the 400.
+export function canonicalChainIdentityHistoryCachePath(url) {
+  const validationError = validateQueryParams(url, ["limit"]);
+  if (validationError) return `${url.pathname}${url.search}`;
+  const { limit, error } = parseLimitParam(url, {
+    defaultLimit: CHAIN_IDENTITY_HISTORY_LIMIT_DEFAULT,
+    maxLimit: CHAIN_IDENTITY_HISTORY_LIMIT_MAX,
+  });
+  if (error) return `${url.pathname}${url.search}`;
+  return `${url.pathname}?limit=${limit}`;
 }
 
 // Shared helper: build a canonical edge-cache key for any windowed route by

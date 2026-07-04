@@ -39,6 +39,7 @@ function installMockCache() {
 }
 
 const {
+  toIso,
   registryItems,
   incidentItems,
   gapsItems,
@@ -335,6 +336,32 @@ describe("feeds — item builders", () => {
     assert.ok(!items[0].title.includes("surfaces"));
   });
 
+  test("toIso normalizes a valid ISO string", () => {
+    assert.equal(toIso("2026-06-12T00:00:00.000Z"), "2026-06-12T00:00:00.000Z");
+  });
+
+  test("toIso keeps Date.parse semantics for digit-only date strings", () => {
+    assert.equal(toIso("2026"), "2026-01-01T00:00:00.000Z");
+  });
+
+  test("toIso normalizes a D1 numeric-string epoch-ms", () => {
+    assert.equal(
+      toIso(String(1781266255266)),
+      new Date(1781266255266).toISOString(),
+    );
+  });
+
+  test("toIso drops an out-of-range numeric string to null", () => {
+    // Date.parse ignores bare epoch-ms strings; D1 returns them as long numeric
+    // strings (10+ digits), so coerce only after parse fails. One ms past the
+    // JS Date max yields a finite Number but an invalid Date — null, not throw.
+    assert.equal(toIso("8640000000000001"), null);
+  });
+
+  test("toIso drops an unparseable string to null", () => {
+    assert.equal(toIso("not-a-date"), null);
+  });
+
   test("incidentItems marks ongoing vs resolved + filters by netuid", () => {
     const all = incidentItems(INCIDENTS);
     assert.equal(all.length, 2); // the no-incidents surface contributes none
@@ -422,6 +449,25 @@ describe("feeds — item builders", () => {
       item = incidentItems(incidents)[0];
     });
     // The item is still emitted with a valid fallback (request-time) timestamp.
+    assert.ok(Number.isFinite(Date.parse(item.timestamp)));
+  });
+
+  test("incidentItems survives a string-typed out-of-range started_at (no RangeError)", () => {
+    // D1 can return INTEGER epoch-ms as a numeric string; coerce first (Date.parse
+    // ignores bare digits) and guard when the epoch is beyond the JS Date range.
+    const incidents = {
+      surfaces: [
+        {
+          netuid: 1,
+          surface_id: "api",
+          incidents: [{ started_at: "8640000000000001" }],
+        },
+      ],
+    };
+    let item;
+    assert.doesNotThrow(() => {
+      item = incidentItems(incidents)[0];
+    });
     assert.ok(Number.isFinite(Date.parse(item.timestamp)));
   });
 

@@ -33,8 +33,12 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-// A non-negative integer netuid, or null for a malformed cell.
+// A non-negative integer netuid, or null for a malformed/absent cell. Guard null
+// explicitly so a null netuid is skipped rather than coerced to subnet 0
+// (Number(null) === 0). Mirrors normalizedNetuid in account-stake-flow.mjs.
 function normalizedNetuid(value) {
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
   const netuid = Number(value);
   return Number.isSafeInteger(netuid) && netuid >= 0 ? netuid : null;
 }

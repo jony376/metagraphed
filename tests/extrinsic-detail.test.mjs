@@ -75,6 +75,55 @@ describe("loadExtrinsicDetail", () => {
     assert.equal(data.events[0].event_kind, "WeightsSet");
   });
 
+  test("coerces string-typed anchor cells before the embedded account_events query", async () => {
+    const capture = [];
+    const extrinsic = {
+      ...EXTRINSIC,
+      block_number: "4200000",
+      extrinsic_index: "3",
+    };
+    const d1 = d1With({ byHash: [extrinsic], events: [EVENT] }, capture);
+    const data = await loadExtrinsicDetail(d1, EXTRINSIC.extrinsic_hash);
+    assert.equal(data.events.length, 1);
+    const q = capture.find((c) => /FROM account_events/.test(c.sql));
+    assert.deepEqual(q.params.slice(0, 3), [4_200_000, 3, 50]);
+    assert.equal(typeof q.params[0], "number");
+    assert.equal(typeof q.params[1], "number");
+  });
+
+  test("skips embedded events when anchor cells are blank strings", async () => {
+    const capture = [];
+    const extrinsic = {
+      ...EXTRINSIC,
+      block_number: "",
+      extrinsic_index: "3",
+    };
+    const d1 = d1With({ byHash: [extrinsic], events: [EVENT] }, capture);
+    const data = await loadExtrinsicDetail(d1, EXTRINSIC.extrinsic_hash);
+    assert.deepEqual(data.events, []);
+    assert.equal(
+      capture.some((c) => /FROM account_events/.test(c.sql)),
+      false,
+    );
+  });
+
+  test("skips embedded events when anchor cells are null or non-integer", async () => {
+    for (const extrinsic of [
+      { ...EXTRINSIC, block_number: null, extrinsic_index: 3 },
+      { ...EXTRINSIC, block_number: 4_200_000, extrinsic_index: "oops" },
+      { ...EXTRINSIC, block_number: -1, extrinsic_index: 3 },
+    ]) {
+      const capture = [];
+      const d1 = d1With({ byHash: [extrinsic], events: [EVENT] }, capture);
+      const data = await loadExtrinsicDetail(d1, EXTRINSIC.extrinsic_hash);
+      assert.deepEqual(data.events, []);
+      assert.equal(
+        capture.some((c) => /FROM account_events/.test(c.sql)),
+        false,
+      );
+    }
+  });
+
   test("lowercases hash refs before the extrinsics lookup", async () => {
     const capture = [];
     const hash = "0x" + "C".repeat(64);

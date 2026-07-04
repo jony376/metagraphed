@@ -324,6 +324,14 @@ export async function withEdgeCache(
   return response;
 }
 
+// D1 MAX(captured_at) is INTEGER but often surfaces as a numeric string; coerce
+// before the integer guard so neurons-tier edge-cache stamps are not always null.
+function coerceCapturedAtStamp(value) {
+  if (value == null) return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? String(n) : null;
+}
+
 // Neurons-tier routes refresh on the ~3-minute events/metagraph cron, not the
 // 15-minute health prober — bust their edge cache on per-subnet snapshot time.
 export async function readSubnetNeuronsCacheStamp(env, netuid) {
@@ -333,10 +341,7 @@ export async function readSubnetNeuronsCacheStamp(env, netuid) {
     [netuid],
   );
   if (hasD1FallbackRows(rows)) return null;
-  const capturedAt = rows[0]?.captured_at;
-  return Number.isInteger(capturedAt) && capturedAt > 0
-    ? String(capturedAt)
-    : null;
+  return coerceCapturedAtStamp(rows[0]?.captured_at);
 }
 
 // Network-wide neuron cache stamp: the newest captured_at across ALL subnets, so a
@@ -353,9 +358,23 @@ export async function readNeuronsCacheStamp(env) {
     [],
   );
   if (hasD1FallbackRows(rows)) return null;
-  const capturedAt = rows[0]?.captured_at;
-  return Number.isInteger(capturedAt) && capturedAt > 0
-    ? String(capturedAt)
+  return coerceCapturedAtStamp(rows[0]?.captured_at);
+}
+
+// Network-wide identity-history cache stamp: the newest observed_at across ALL
+// subnets' identity changes, so the network identity-history feed busts its edge
+// cache the moment any subnet records a new change. The append-only feed analog of
+// readNeuronsCacheStamp.
+export async function readIdentityHistoryCacheStamp(env) {
+  const rows = await d1All(
+    env,
+    "SELECT MAX(observed_at) AS observed_at FROM subnet_identity_history",
+    [],
+  );
+  if (hasD1FallbackRows(rows)) return null;
+  const observedAt = rows[0]?.observed_at;
+  return Number.isInteger(observedAt) && observedAt > 0
+    ? String(observedAt)
     : null;
 }
 
