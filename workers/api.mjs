@@ -93,8 +93,10 @@ import {
   handleSubnetYieldHistory,
   handleChainConcentration,
   handleChainPerformance,
+  handleChainPerformanceHistory,
   handleChainIdentityHistory,
   canonicalChainIdentityHistoryCachePath,
+  canonicalChainPerformanceHistoryCachePath,
   handleChainYield,
   canonicalSubnetHistoryCachePath,
   canonicalSubnetConcentrationHistoryCachePath,
@@ -2111,6 +2113,19 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         (edgeEnv) => readNeuronsCacheStamp(edgeEnv),
       );
     }
+    // GET /api/v1/chain/performance/history: per-day network-wide reward-flow &
+    // trust trend across every subnet's neuron_daily rows — edge-cache keyed on the
+    // resolved window (like the sibling /subnets/{netuid}/performance/history route).
+    if (resolved.url.pathname === "/api/v1/chain/performance/history") {
+      return withEdgeCache(
+        request,
+        ctx,
+        env,
+        "chain-performance-history",
+        () => handleChainPerformanceHistory(request, env, resolved.url),
+        canonicalChainPerformanceHistoryCachePath(resolved.url),
+      );
+    }
     // GET /api/v1/chain/identity-history: network-wide recent subnet-identity-change
     // feed across ALL subnets (newest first) — edge-cache busts on the newest
     // identity change's observed_at; ?limit rides the canonical cache path so a bare
@@ -2229,6 +2244,7 @@ function isMainnetOnlyApiPath(pathname) {
     pathname === "/api/v1/chain/stake-moves" ||
     pathname === "/api/v1/chain/concentration" ||
     pathname === "/api/v1/chain/performance" ||
+    pathname === "/api/v1/chain/performance/history" ||
     pathname === "/api/v1/chain/identity-history" ||
     pathname === "/api/v1/chain/yield" ||
     pathname === "/api/v1/chain/turnover" ||

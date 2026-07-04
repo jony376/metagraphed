@@ -9,6 +9,10 @@
 // envelope. Null-safe: an empty snapshot yields a schema-stable `null` block.
 
 import { computeConcentration } from "./concentration.mjs";
+import {
+  parseSubnetPerformanceHistoryWindow,
+  PERFORMANCE_HISTORY_ROW_CAP,
+} from "./subnet-performance.mjs";
 
 // The neurons-tier columns the network performance handler reads — like the
 // per-subnet read but with `netuid`, so the artifact can report how many subnets
@@ -160,4 +164,91 @@ export async function loadChainPerformance(d1) {
     [],
   );
   return buildChainPerformance(rows);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Re-export the shared history window parser (7d/30d/90d, default 30d) so chain
+// and subnet performance-history routes cannot drift.
+export {
+  parseSubnetPerformanceHistoryWindow as parseChainPerformanceHistoryWindow,
+  PERFORMANCE_HISTORY_ROW_CAP,
+};
+
+// neuron_daily columns for the network-wide performance history read — netuid is
+// required so each day's subnet_count is exact.
+export const CHAIN_PERFORMANCE_HISTORY_READ_COLUMNS =
+  "snapshot_date, incentive, dividends, trust, consensus, " +
+  "validator_trust, validator_permit, active, netuid";
+
+// Project one day's cross-subnet neuron_daily rows to a flat, chartable point.
+// Reuses buildChainPerformance so a day's reward-flow metrics match the snapshot route.
+function chainPerformanceHistoryPoint(date, dayRows) {
+  const card = buildChainPerformance(dayRows);
+  return {
+    snapshot_date: date,
+    subnet_count: card.subnet_count,
+    neuron_count: card.neuron_count,
+    validator_count: card.validator_count,
+    active_count: card.active_count,
+    incentive_gini: card.incentive?.gini ?? null,
+    incentive_nakamoto_coefficient:
+      card.incentive?.nakamoto_coefficient ?? null,
+    incentive_top_10pct_share: card.incentive?.top_10pct_share ?? null,
+    dividends_gini: card.dividends?.gini ?? null,
+    dividends_nakamoto_coefficient:
+      card.dividends?.nakamoto_coefficient ?? null,
+    dividends_top_10pct_share: card.dividends?.top_10pct_share ?? null,
+    trust_mean: card.trust?.mean ?? null,
+    trust_median: card.trust?.p50 ?? null,
+    consensus_mean: card.consensus?.mean ?? null,
+    consensus_median: card.consensus?.p50 ?? null,
+    validator_trust_mean: card.validator_trust?.mean ?? null,
+    validator_trust_median: card.validator_trust?.p50 ?? null,
+  };
+}
+
+// Build the per-day network performance time series (newest first) from neuron_daily
+// rows already ordered snapshot_date DESC. `capped` (the read hit the row cap) drops the
+// oldest day, which may be a partial distribution. Null-safe: a cold store yields
+// point_count:0.
+export function buildChainPerformanceHistory(rows, { window, capped } = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const byDate = new Map();
+  for (const row of list) {
+    const date = row?.snapshot_date;
+    if (typeof date !== "string" || !date) continue;
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(row);
+  }
+  let dates = [...byDate.keys()];
+  if (capped && dates.length > 1) dates = dates.slice(0, -1);
+  const points = dates.map((date) =>
+    chainPerformanceHistoryPoint(date, byDate.get(date)),
+  );
+  return {
+    schema_version: 1,
+    window: window ?? null,
+    point_count: points.length,
+    points,
+  };
+}
+
+// Shared D1 loader — read EVERY subnet's dated neuron_daily rows over the window
+// and shape them into the per-day network performance series. Cold store -> point_count:0.
+export async function loadChainPerformanceHistory(
+  d1,
+  { windowLabel, windowDays },
+) {
+  const cutoff = new Date(Date.now() - windowDays * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+  const rows = await d1(
+    `SELECT ${CHAIN_PERFORMANCE_HISTORY_READ_COLUMNS} FROM neuron_daily WHERE snapshot_date >= ? ORDER BY snapshot_date DESC LIMIT ?`,
+    [cutoff, PERFORMANCE_HISTORY_ROW_CAP],
+  );
+  return buildChainPerformanceHistory(rows, {
+    window: windowLabel,
+    capped: rows.length >= PERFORMANCE_HISTORY_ROW_CAP,
+  });
 }

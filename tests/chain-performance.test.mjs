@@ -4,6 +4,10 @@ import {
   buildChainPerformance,
   scoreDistribution,
   loadChainPerformance,
+  buildChainPerformanceHistory,
+  loadChainPerformanceHistory,
+  parseChainPerformanceHistoryWindow,
+  PERFORMANCE_HISTORY_ROW_CAP,
 } from "../src/chain-performance.mjs";
 import { handleRequest } from "../workers/api.mjs";
 import { createLocalArtifactEnv } from "../scripts/lib.mjs";
@@ -333,5 +337,225 @@ describe("chain/performance edge cache", () => {
     // A non-null stamp resolver + 200 means the response was cached: proof the
     // stamp resolver arrow ran and returned the network captured_at.
     assert.equal(store.size, 1);
+  });
+});
+
+describe("parseChainPerformanceHistoryWindow", () => {
+  test("accepts 7d/30d/90d and defaults to 30d", () => {
+    assert.equal(parseChainPerformanceHistoryWindow("7d").days, 7);
+    assert.equal(parseChainPerformanceHistoryWindow(undefined).days, 30);
+  });
+
+  test("rejects an unsupported window", () => {
+    assert.ok(parseChainPerformanceHistoryWindow("1y").error);
+  });
+});
+
+describe("buildChainPerformanceHistory", () => {
+  test("groups neuron_daily rows by day across subnets", () => {
+    const data = buildChainPerformanceHistory(
+      [
+        {
+          snapshot_date: "2026-06-27",
+          incentive: 0.9,
+          dividends: 0.9,
+          trust: 0.8,
+          consensus: 0.7,
+          validator_trust: 0.85,
+          validator_permit: 1,
+          active: 1,
+          netuid: 1,
+        },
+        {
+          snapshot_date: "2026-06-27",
+          incentive: 0.05,
+          dividends: 0,
+          trust: 0.2,
+          consensus: 0.1,
+          validator_trust: 0,
+          validator_permit: 0,
+          active: 1,
+          netuid: 2,
+        },
+        {
+          snapshot_date: "2026-06-26",
+          incentive: 0.5,
+          dividends: 0.5,
+          trust: 0.5,
+          consensus: 0.5,
+          validator_trust: 0.5,
+          validator_permit: 1,
+          active: 1,
+          netuid: 1,
+        },
+      ],
+      { window: "30d" },
+    );
+    assert.equal(data.window, "30d");
+    assert.equal(data.point_count, 2);
+    assert.equal(data.points[0].snapshot_date, "2026-06-27");
+    assert.equal(data.points[0].subnet_count, 2);
+    assert.ok(data.points[0].incentive_gini > data.points[1].incentive_gini);
+  });
+
+  test("drops the oldest day when the read was row-capped", () => {
+    const data = buildChainPerformanceHistory(
+      [
+        {
+          snapshot_date: "2026-06-27",
+          incentive: 0.5,
+          validator_permit: 0,
+          netuid: 1,
+        },
+        {
+          snapshot_date: "2026-06-26",
+          incentive: 0.5,
+          validator_permit: 0,
+          netuid: 1,
+        },
+      ],
+      { window: "7d", capped: true },
+    );
+    assert.equal(data.point_count, 1);
+    assert.equal(data.points[0].snapshot_date, "2026-06-27");
+  });
+
+  test("skips rows with no snapshot_date and is cold-store safe", () => {
+    const data = buildChainPerformanceHistory(
+      [
+        { snapshot_date: null, incentive: 0.5, netuid: 1 },
+        {
+          snapshot_date: "2026-06-27",
+          incentive: 0.5,
+          validator_permit: 0,
+          netuid: 1,
+        },
+      ],
+      { window: "30d" },
+    );
+    assert.equal(data.point_count, 1);
+    for (const rows of [[], "nope", null]) {
+      const empty = buildChainPerformanceHistory(rows, { window: "30d" });
+      assert.equal(empty.point_count, 0);
+      assert.deepEqual(empty.points, []);
+    }
+  });
+
+  test("an omitted window is emitted as null", () => {
+    assert.equal(buildChainPerformanceHistory([]).window, null);
+  });
+});
+
+describe("loadChainPerformanceHistory", () => {
+  test("queries neuron_daily without a netuid filter", async () => {
+    let seen;
+    const d1 = async (sql, params) => {
+      seen = { sql, params };
+      return [
+        {
+          snapshot_date: "2026-06-27",
+          incentive: 0.5,
+          validator_permit: 0,
+          active: 1,
+          netuid: 7,
+        },
+      ];
+    };
+    const data = await loadChainPerformanceHistory(d1, {
+      windowLabel: "7d",
+      windowDays: 7,
+    });
+    assert.match(seen.sql, /FROM neuron_daily WHERE snapshot_date >= \?/);
+    assert.doesNotMatch(seen.sql, /WHERE netuid/);
+    assert.equal(data.point_count, 1);
+  });
+
+  test("marks capped when the read hits PERFORMANCE_HISTORY_ROW_CAP", async () => {
+    const rows = Array.from(
+      { length: PERFORMANCE_HISTORY_ROW_CAP },
+      (_, i) => ({
+        snapshot_date: i % 2 === 0 ? "2026-06-27" : "2026-06-26",
+        incentive: 0.5,
+        validator_permit: 0,
+        active: 1,
+        netuid: 1,
+      }),
+    );
+    const data = await loadChainPerformanceHistory(async () => rows, {
+      windowLabel: "90d",
+      windowDays: 90,
+    });
+    assert.equal(data.point_count, 1);
+  });
+});
+
+describe("GET /api/v1/chain/performance/history", () => {
+  function neuronDailyEnv(rows = []) {
+    return {
+      METAGRAPH_HEALTH_DB: {
+        prepare(sql) {
+          return {
+            bind: () => ({
+              all: () => {
+                if (/FROM neuron_daily/.test(sql)) {
+                  return Promise.resolve({ results: rows });
+                }
+                return Promise.resolve({ results: [] });
+              },
+            }),
+          };
+        },
+      },
+    };
+  }
+
+  test("returns a per-day network performance trend", async () => {
+    const res = await handleRequest(
+      new Request(
+        "https://api.metagraph.sh/api/v1/chain/performance/history?window=30d",
+      ),
+      neuronDailyEnv([
+        {
+          snapshot_date: "2026-06-27",
+          incentive: 0.5,
+          dividends: 0.5,
+          trust: 0.5,
+          consensus: 0.5,
+          validator_trust: 0.5,
+          validator_permit: 1,
+          active: 1,
+          netuid: 1,
+        },
+      ]),
+      {},
+    );
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.data.window, "30d");
+    assert.equal(body.data.point_count, 1);
+    assert.equal(body.data.points[0].subnet_count, 1);
+  });
+
+  test("rejects an unsupported window with 400", async () => {
+    const res = await handleRequest(
+      new Request(
+        "https://api.metagraph.sh/api/v1/chain/performance/history?window=1y",
+      ),
+      neuronDailyEnv(),
+      {},
+    );
+    assert.equal(res.status, 400);
+  });
+
+  test("defaults to the 30d window on cold D1", async () => {
+    const res = await handleRequest(
+      new Request("https://api.metagraph.sh/api/v1/chain/performance/history"),
+      neuronDailyEnv(),
+      {},
+    );
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.data.window, "30d");
+    assert.equal(body.data.point_count, 0);
   });
 });

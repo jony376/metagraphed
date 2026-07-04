@@ -616,6 +616,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chain/performance/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch the per-day network-wide reward-flow and trust trend over a 7d/30d/90d window: incentive/dividends concentration (Gini, Nakamoto coefficient, top-10% share) plus the mean/median of trust, consensus, and validator_trust scores, one point per day (computed live from the neuron_daily D1 rollup). The time-series companion to /chain/performance and the network-wide twin of /subnets/{netuid}/performance/history. */
+        get: operations["chainPerformanceHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chain/prometheus": {
         parameters: {
             query?: never;
@@ -3325,6 +3342,35 @@ export interface components {
             trust: components["schemas"]["ScoreDistribution"];
             validator_count?: number;
             validator_trust?: components["schemas"]["ScoreDistribution"];
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Per-day network-wide reward-flow and trust trend (newest first) over a 7d/30d/90d window across every subnet: the incentive/dividends reward concentration (Gini, Nakamoto coefficient, top-10% share) plus the mean/median of the 0-1 trust, consensus, and validator_trust scores. The network-wide time-series companion to /chain/performance and the network twin of /subnets/{netuid}/performance/history, computed live from the neuron_daily D1 rollup. */
+        ChainPerformanceHistoryArtifact: {
+            point_count: number;
+            points: ({
+                active_count?: number;
+                consensus_mean?: number | null;
+                consensus_median?: number | null;
+                dividends_gini?: number | null;
+                dividends_nakamoto_coefficient?: number | null;
+                dividends_top_10pct_share?: number | null;
+                incentive_gini?: number | null;
+                incentive_nakamoto_coefficient?: number | null;
+                incentive_top_10pct_share?: number | null;
+                neuron_count?: number;
+                snapshot_date: string;
+                subnet_count?: number;
+                trust_mean?: number | null;
+                trust_median?: number | null;
+                validator_count?: number;
+                validator_trust_mean?: number | null;
+                validator_trust_median?: number | null;
+            } & {
+                [key: string]: unknown;
+            })[];
+            schema_version: number;
+            window?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -11490,6 +11536,114 @@ export interface operations {
                      */
                     "application/json": components["schemas"]["SuccessEnvelope"] & {
                         data?: components["schemas"]["ChainPerformanceArtifact"];
+                    };
+                };
+            };
+            /** @description ETag matched and the cached response is still valid. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query parameters were malformed or unsupported. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Artifact or API route was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description HTTP method is not supported. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unexpected backend error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    chainPerformanceHistory: {
+        parameters: {
+            query?: {
+                window?: "7d" | "30d" | "90d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical artifact wrapped in the Metagraphed API envelope. */
+            200: {
+                headers: {
+                    "cache-control": components["headers"]["CacheControl"];
+                    etag: components["headers"]["ETag"];
+                    "x-metagraph-contract-version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "point_count": 1,
+                     *         "points": [
+                     *           {
+                     *             "snapshot_date": "example"
+                     *           }
+                     *         ],
+                     *         "schema_version": 1,
+                     *         "window": "30d"
+                     *       },
+                     *       "meta": {
+                     *         "artifact_path": "example",
+                     *         "cache": "short",
+                     *         "contract_version": "2026-06-29.1",
+                     *         "generated_at": "2026-06-01T00:00:00.000Z",
+                     *         "pagination": {
+                     *           "collection": "example",
+                     *           "cursor": 1,
+                     *           "limit": 1,
+                     *           "next_cursor": 1,
+                     *           "order": "asc",
+                     *           "returned": 1,
+                     *           "sort": "example",
+                     *           "total": 1
+                     *         },
+                     *         "published_at": "2026-06-01T00:00:00.000Z",
+                     *         "source": "live-cron-prober",
+                     *         "stale_contract": {
+                     *           "built_under": "example",
+                     *           "live": "example"
+                     *         }
+                     *       },
+                     *       "ok": true,
+                     *       "schema_version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SuccessEnvelope"] & {
+                        data?: components["schemas"]["ChainPerformanceHistoryArtifact"];
                     };
                 };
             };

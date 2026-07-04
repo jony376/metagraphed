@@ -828,6 +828,13 @@
     },
     {
       "contract_version": "2026-07-03.2",
+      "id": "chain-performance-history",
+      "path": "/metagraph/chain/performance/history.json",
+      "schema_ref": "#/components/schemas/ChainPerformanceHistoryArtifact",
+      "storage_tier": "r2"
+    },
+    {
+      "contract_version": "2026-07-03.2",
       "id": "chain-identity-history",
       "path": "/metagraph/chain/identity-history.json",
       "schema_ref": "#/components/schemas/ChainIdentityHistoryArtifact",
@@ -7038,6 +7045,30 @@
       "query_collection": null,
       "query_filter_names": [],
       "query_parameters": []
+    },
+    {
+      "artifact_path": "/metagraph/chain/performance/history.json",
+      "cache": "short",
+      "description": "Fetch the per-day network-wide reward-flow and trust trend over a 7d/30d/90d window: incentive/dividends concentration (Gini, Nakamoto coefficient, top-10% share) plus the mean/median of trust, consensus, and validator_trust scores, one point per day (computed live from the neuron_daily D1 rollup). The time-series companion to /chain/performance and the network-wide twin of /subnets/{netuid}/performance/history.",
+      "id": "chain-performance-history",
+      "method": "GET",
+      "path": "/api/v1/chain/performance/history",
+      "public": true,
+      "query_collection": null,
+      "query_filter_names": [],
+      "query_parameters": [
+        {
+          "name": "window",
+          "schema": {
+            "enum": [
+              "7d",
+              "30d",
+              "90d"
+            ],
+            "type": "string"
+          }
+        }
+      ]
     },
     {
       "artifact_path": "/metagraph/chain/identity-history.json",

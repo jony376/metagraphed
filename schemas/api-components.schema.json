@@ -4148,6 +4148,134 @@
         ],
         "type": "object"
       },
+      "ChainPerformanceHistoryArtifact": {
+        "additionalProperties": true,
+        "description": "Per-day network-wide reward-flow and trust trend (newest first) over a 7d/30d/90d window across every subnet: the incentive/dividends reward concentration (Gini, Nakamoto coefficient, top-10% share) plus the mean/median of the 0-1 trust, consensus, and validator_trust scores. The network-wide time-series companion to /chain/performance and the network twin of /subnets/{netuid}/performance/history, computed live from the neuron_daily D1 rollup.",
+        "properties": {
+          "point_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "points": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "active_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "consensus_mean": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "consensus_median": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "dividends_gini": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "dividends_nakamoto_coefficient": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "dividends_top_10pct_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "incentive_gini": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "incentive_nakamoto_coefficient": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "incentive_top_10pct_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "neuron_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "snapshot_date": {
+                  "type": "string"
+                },
+                "subnet_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "trust_mean": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "trust_median": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "validator_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "validator_trust_mean": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "validator_trust_median": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "snapshot_date"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "type": "integer"
+          },
+          "window": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "point_count",
+          "points"
+        ],
+        "type": "object"
+      },
       "ChainPrometheusArtifact": {
         "additionalProperties": false,
         "description": "Network-wide Prometheus-endpoint serving activity over a 7d/30d window across the subnets with observed telemetry activity: a per-subnet leaderboard (distinct exporters, PrometheusServed count, announcements per exporter) plus a network rollup with the true distinct exporter count and a distribution of per-subnet re-announcement intensity. The telemetry-endpoint companion to /api/v1/chain/serving (axon endpoints) — which subnets run observability infrastructure — served live from the account_events PrometheusServed stream at /api/v1/chain/prometheus (no static file); subnet_count 0 and the leaderboard empty when cold.",

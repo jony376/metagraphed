@@ -111,7 +111,11 @@ import {
   loadChainConcentration,
   parseConcentrationHistoryWindow,
 } from "../../src/concentration.mjs";
-import { loadChainPerformance } from "../../src/chain-performance.mjs";
+import {
+  loadChainPerformance,
+  loadChainPerformanceHistory,
+  parseChainPerformanceHistoryWindow,
+} from "../../src/chain-performance.mjs";
 import { loadChainYield } from "../../src/chain-yield.mjs";
 import {
   CHAIN_IDENTITY_HISTORY_LIMIT_DEFAULT,
@@ -815,6 +819,37 @@ export async function handleChainPerformance(request, env, url) {
   );
 }
 
+// GET /api/v1/chain/performance/history?window=7d|30d|90d: per-day network-wide
+// reward-flow & trust trend across EVERY subnet's neuron_daily rows — incentive/
+// dividends concentration plus trust/consensus/validator_trust mean & median, one
+// point per day. The time-series companion to /chain/performance and the network-
+// wide twin of /subnets/{netuid}/performance/history. Cold/absent store → 200 with
+// points:[].
+export async function handleChainPerformanceHistory(request, env, url) {
+  const validationError = validateQueryParams(url, ["window"]);
+  if (validationError) return analyticsQueryError(validationError);
+  const { label, days, error } = parseChainPerformanceHistoryWindow(
+    url.searchParams.get("window"),
+  );
+  if (error) return analyticsQueryError(error);
+  const data = await loadChainPerformanceHistory(d1Runner(env), {
+    windowLabel: label,
+    windowDays: days,
+  });
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: await metagraphMeta(
+        env,
+        "/metagraph/chain/performance/history.json",
+        data.points[0]?.snapshot_date ?? null,
+      ),
+    },
+    "short",
+  );
+}
+
 // GET /api/v1/chain/identity-history: the most-recent SubnetIdentitiesV3 changes
 // aggregated across EVERY subnet (newest first), each entry shaped like the
 // per-subnet /identity-history route plus its `netuid`. The network analog of
@@ -907,6 +942,10 @@ export function canonicalSubnetConcentrationHistoryCachePath(url) {
 
 export function canonicalSubnetPerformanceHistoryCachePath(url) {
   return canonicalWindowedCachePath(url, parseSubnetPerformanceHistoryWindow);
+}
+
+export function canonicalChainPerformanceHistoryCachePath(url) {
+  return canonicalWindowedCachePath(url, parseChainPerformanceHistoryWindow);
 }
 
 export function canonicalSubnetYieldHistoryCachePath(url) {

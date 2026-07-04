@@ -1326,6 +1326,12 @@ export const PUBLIC_ARTIFACTS = [
     "ChainPerformanceArtifact",
   ),
   artifact(
+    "chain-performance-history",
+    "/metagraph/chain/performance/history.json",
+    "Per-day network-wide reward-flow and trust trend (incentive/dividends concentration plus trust/consensus/validator_trust mean & median) over a 7d/30d/90d window across every subnet, served live from the neuron_daily D1 rollup at /api/v1/chain/performance/history (no static file). The time-series companion to /chain/performance and the network-wide twin of /subnets/{netuid}/performance/history.",
+    "ChainPerformanceHistoryArtifact",
+  ),
+  artifact(
     "chain-identity-history",
     "/metagraph/chain/identity-history.json",
     "Network-wide recent subnet-identity-change feed (newest first) aggregated across all subnets: the most-recent SubnetIdentitiesV3 changes, each carrying the netuid it belongs to plus the same tracked identity fields as the per-subnet identity-history route, capped to a ?limit (default 50, max 200) and reporting the distinct subnet_count the feed spans, computed live from the subnet_identity_history D1 tier at /api/v1/chain/identity-history (no static file).",
@@ -3033,6 +3039,22 @@ export const API_ROUTES = [
     "short",
     ["chain", "analytics"],
     [],
+    [],
+  ),
+  route(
+    "chain-performance-history",
+    "GET",
+    "/api/v1/chain/performance/history",
+    "/metagraph/chain/performance/history.json",
+    "Fetch the per-day network-wide reward-flow and trust trend over a 7d/30d/90d window: incentive/dividends concentration (Gini, Nakamoto coefficient, top-10% share) plus the mean/median of trust, consensus, and validator_trust scores, one point per day (computed live from the neuron_daily D1 rollup). The time-series companion to /chain/performance and the network-wide twin of /subnets/{netuid}/performance/history.",
+    "short",
+    ["chain", "analytics"],
+    [
+      {
+        name: "window",
+        schema: { type: "string", enum: ["7d", "30d", "90d"] },
+      },
+    ],
     [],
   ),
   route(

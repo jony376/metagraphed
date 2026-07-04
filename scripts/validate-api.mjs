@@ -846,6 +846,14 @@ const checks = [
     },
   ],
   [
+    "/api/v1/chain/performance/history",
+    (body) => {
+      assert.equal(body.data.schema_version, 1);
+      assert.equal(typeof body.data.point_count, "number");
+      assert.equal(Array.isArray(body.data.points), true);
+    },
+  ],
+  [
     "/api/v1/chain/identity-history",
     (body) => {
       assert.equal(body.data.schema_version, 1);
