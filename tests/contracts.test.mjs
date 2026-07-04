@@ -232,6 +232,14 @@ describe("public contract registry", () => {
         "/api/v1/subnets/{netuid}/uptime",
         "surface_id,day,samples,uptime_ratio,avg_latency_ms,latency_sample_count,p50_latency_ms,p95_latency_ms,p99_latency_ms,status",
       ],
+      [
+        "/api/v1/subnets/{netuid}/trajectory",
+        "date,completeness_score,surface_count,endpoint_count,validator_count,miner_count,total_stake_tao,alpha_price_tao,emission_share",
+      ],
+      [
+        "/api/v1/subnets/{netuid}/yield",
+        "uid,hotkey,role,stake_tao,emission_tao,yield,vs_median",
+      ],
     ];
     for (const [path, expectedHeader] of csvExamples) {
       const csvContent =
