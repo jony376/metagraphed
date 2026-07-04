@@ -75,6 +75,8 @@ function toChainPosition(value) {
 // (#2662) and the coercion in formatRegistration (#2487).
 function toTaoOrNull(value) {
   if (value == null) return null;
+  // Blank D1 cells coerce via Number("") → 0; trim rejects "" / whitespace-only.
+  if (typeof value === "string" && value.trim() === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? Math.round(n * 1e9) / 1e9 : null;
 }

@@ -206,6 +206,31 @@ test("formatExtrinsic maps a non-numeric fee_tao/tip_tao to null (not NaN)", () 
   assert.equal(out.tip_tao, null);
 });
 
+test("formatExtrinsic rejects blank fee_tao/tip_tao cells that coerce to 0", () => {
+  // Mirrors the blank-cell guard in toChainPosition() (#2974): Number("") is 0.
+  for (const blank of ["", "   "]) {
+    const out = formatExtrinsic({
+      block_number: 10,
+      extrinsic_index: 0,
+      fee_tao: blank,
+      tip_tao: blank,
+      observed_at: 1750000000000,
+    });
+    assert.equal(out.fee_tao, null, `fee_tao for ${JSON.stringify(blank)}`);
+    assert.equal(out.tip_tao, null, `tip_tao for ${JSON.stringify(blank)}`);
+  }
+  // A literal zero fee/tip is still valid — only blank strings are rejected.
+  const zero = formatExtrinsic({
+    block_number: 10,
+    extrinsic_index: 0,
+    fee_tao: 0,
+    tip_tao: "0",
+    observed_at: 1750000000000,
+  });
+  assert.equal(zero.fee_tao, 0);
+  assert.equal(zero.tip_tao, 0);
+});
+
 test("formatExtrinsic coerces a string-typed observed_at cell to an ISO timestamp", () => {
   // D1 can return the INTEGER observed_at as a numeric string; the old
   // Number.isFinite(string) guard dropped a real timestamp to null. Mirrors #2708.
