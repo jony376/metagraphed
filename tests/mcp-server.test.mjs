@@ -3427,9 +3427,9 @@ describe("MCP get_subnet_deregistrations", () => {
   function deregistrationsD1(row = null) {
     return {
       METAGRAPH_HEALTH_DB: {
-        prepare(sql) {
+        prepare(_sql) {
           return {
-            bind(...params) {
+            bind(..._params) {
               return {
                 async all() {
                   return { results: row ? [row] : [] };
@@ -3462,6 +3462,24 @@ describe("MCP get_subnet_deregistrations", () => {
     assert.equal(out.deregistrations_per_hotkey, 4);
   });
 
+  test("defaults to the 7d window and degrades to a zeroed card on cold D1", async () => {
+    const res = await callTool("get_subnet_deregistrations", { netuid: 9 });
+    const out = res.body.result.structuredContent;
+    assert.equal(out.window, "7d");
+    assert.equal(out.distinct_deregistered_hotkeys, 0);
+    assert.equal(out.deregistrations, 0);
+    assert.equal(out.deregistrations_per_hotkey, null);
+  });
+
+  test("rejects an unsupported window", async () => {
+    const res = await callTool("get_subnet_deregistrations", {
+      netuid: 9,
+      window: "90d",
+    });
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /window must be one of/);
+  });
+
   test("rejects a missing netuid", async () => {
     const res = await callTool("get_subnet_deregistrations", { window: "30d" });
     assert.equal(res.body.result.isError, true);
@@ -3473,9 +3491,9 @@ describe("MCP get_subnet_performance_history", () => {
   function performanceHistoryD1(rows = []) {
     return {
       METAGRAPH_HEALTH_DB: {
-        prepare(sql) {
+        prepare(_sql) {
           return {
-            bind(...params) {
+            bind(..._params) {
               return {
                 async all() {
                   return { results: rows };
@@ -3514,6 +3532,14 @@ describe("MCP get_subnet_performance_history", () => {
     assert.equal(out.points[0].snapshot_date, "2026-06-25");
   });
 
+  test("defaults to the 30d window on cold D1", async () => {
+    const res = await callTool("get_subnet_performance_history", { netuid: 7 });
+    const out = res.body.result.structuredContent;
+    assert.equal(out.window, "30d");
+    assert.equal(out.point_count, 0);
+    assert.deepEqual(out.points, []);
+  });
+
   test("rejects an invalid window", async () => {
     const res = await callTool("get_subnet_performance_history", {
       netuid: 7,
@@ -3521,6 +3547,14 @@ describe("MCP get_subnet_performance_history", () => {
     });
     assert.equal(res.body.result.isError, true);
     assert.match(res.body.result.content[0].text, /window must be one of/);
+  });
+
+  test("rejects a missing netuid", async () => {
+    const res = await callTool("get_subnet_performance_history", {
+      window: "7d",
+    });
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /netuid/i);
   });
 });
 
