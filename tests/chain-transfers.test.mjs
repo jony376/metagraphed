@@ -122,6 +122,45 @@ describe("buildChainTransfers", () => {
     });
     assert.equal(d.total_volume_tao, 0.3);
   });
+
+  test("skips blank/null/non-numeric volume rows instead of phantom zero-TAO parties", () => {
+    // Mirrors buildCounterparties #3059: blank volume must not inflate transfer_count.
+    for (const blank of ["", "   ", null, "nope"]) {
+      const d = buildChainTransfers({
+        totals: { total_volume_tao: 100, transfer_count: 2 },
+        senders: [
+          { address: "5Sa", volume_tao: blank, transfer_count: 9 },
+          party("5Sb", 100, 2),
+        ],
+        receivers: [
+          { address: "5Rx", volume_tao: blank, transfer_count: 4 },
+          party("5Ry", 50, 1),
+        ],
+      });
+      assert.equal(
+        d.top_senders.length,
+        1,
+        `sender count for volume ${JSON.stringify(blank)}`,
+      );
+      assert.equal(d.top_senders[0].address, "5Sb");
+      assert.equal(d.top_senders[0].volume_tao, 100);
+      assert.equal(d.top_senders[0].transfer_count, 2);
+      assert.equal(
+        d.top_receivers.length,
+        1,
+        `receiver count for volume ${JSON.stringify(blank)}`,
+      );
+      assert.equal(d.top_receivers[0].address, "5Ry");
+      assert.equal(d.top_receivers[0].volume_tao, 50);
+    }
+    const zero = buildChainTransfers({
+      senders: [party("5Sa", 0, 3)],
+      receivers: [party("5Rx", 0, 2)],
+    });
+    assert.equal(zero.top_senders[0].volume_tao, 0);
+    assert.equal(zero.top_senders[0].transfer_count, 3);
+    assert.equal(zero.top_receivers[0].transfer_count, 2);
+  });
 });
 
 describe("loadChainTransfers", () => {
@@ -150,10 +189,13 @@ describe("loadChainTransfers", () => {
     });
     assert.equal(calls.length, 3);
     assert.match(calls[0].sql, /FROM account_events WHERE event_kind = \?/);
+    assert.match(calls[0].sql, /amount_tao IS NOT NULL AND amount_tao >= 0/);
     assert.equal(calls[0].params[0], "Transfer");
     assert.match(calls[1].sql, /GROUP BY hotkey/);
+    assert.match(calls[1].sql, /amount_tao IS NOT NULL AND amount_tao >= 0/);
     assert.equal(calls[1].params[2], 10); // limit
     assert.match(calls[2].sql, /GROUP BY coldkey/);
+    assert.match(calls[2].sql, /amount_tao IS NOT NULL AND amount_tao >= 0/);
     assert.equal(d.total_volume_tao, 90);
     assert.equal(d.top_senders[0].address, "5Sa");
     assert.equal(d.top_receivers[0].address, "5Rx");

@@ -10,6 +10,12 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TRANSFER_KIND = "Transfer";
 
+// Rows with NULL/negative amount_tao must not enter transfer rollups — COUNT(*) would
+// still count them while SUM(amount_tao) collapses to zero (mirrors chain-transfer-pairs
+// PAIR_FILTER and counterparties #3059).
+const TRANSFER_AMOUNT_FILTER =
+  "event_kind = ? AND observed_at >= ? AND amount_tao IS NOT NULL AND amount_tao >= 0";
+
 // Supported windows (label -> days), the same set + default the sibling /chain/* analytics
 // use (config.mjs ANALYTICS_WINDOWS / DEFAULT_ANALYTICS_WINDOW).
 export const CHAIN_TRANSFER_WINDOWS = { "7d": 7, "30d": 30 };
@@ -29,6 +35,14 @@ function roundTao(value) {
 function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+// A finite TAO aggregate cell, or null when absent/blank/non-numeric.
+function nullableTao(value) {
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 // A whole non-negative count (D1 COUNT is integer; truncate defensively for direct callers).
@@ -53,13 +67,18 @@ function roundShare(value, dp = 4) {
 // Shape one side's leaderboard rows (address + summed volume + transfer count) into a
 // ranked list. Drops rows with a missing address so a NULL sender/receiver cannot leak in.
 function shapeParties(rows) {
-  return (Array.isArray(rows) ? rows : [])
-    .filter((row) => typeof row?.address === "string" && row.address.length > 0)
-    .map((row) => ({
+  const parties = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (typeof row?.address !== "string" || row.address.length === 0) continue;
+    const volume = nullableTao(row?.volume_tao);
+    if (volume == null) continue;
+    parties.push({
       address: row.address,
-      volume_tao: roundTao(row?.volume_tao),
+      volume_tao: roundTao(volume),
       transfer_count: toCount(row?.transfer_count),
-    }));
+    });
+  }
+  return parties;
 }
 
 // Shape the network transfer scorecard. `totals` is the single-row aggregate (count,
@@ -120,20 +139,20 @@ export async function loadChainTransfers(
       "COALESCE(SUM(amount_tao), 0) AS total_volume_tao, " +
       "COUNT(DISTINCT hotkey) AS unique_senders, " +
       "COUNT(DISTINCT coldkey) AS unique_receivers " +
-      "FROM account_events WHERE event_kind = ? AND observed_at >= ?",
+      `FROM account_events WHERE ${TRANSFER_AMOUNT_FILTER}`,
     [TRANSFER_KIND, cutoff],
   );
   const senders = await d1(
     "SELECT hotkey AS address, SUM(amount_tao) AS volume_tao, " +
       "COUNT(*) AS transfer_count FROM account_events " +
-      "WHERE event_kind = ? AND observed_at >= ? AND hotkey IS NOT NULL " +
+      `WHERE ${TRANSFER_AMOUNT_FILTER} AND hotkey IS NOT NULL ` +
       "GROUP BY hotkey ORDER BY volume_tao DESC, hotkey ASC LIMIT ?",
     [TRANSFER_KIND, cutoff, limit],
   );
   const receivers = await d1(
     "SELECT coldkey AS address, SUM(amount_tao) AS volume_tao, " +
       "COUNT(*) AS transfer_count FROM account_events " +
-      "WHERE event_kind = ? AND observed_at >= ? AND coldkey IS NOT NULL " +
+      `WHERE ${TRANSFER_AMOUNT_FILTER} AND coldkey IS NOT NULL ` +
       "GROUP BY coldkey ORDER BY volume_tao DESC, coldkey ASC LIMIT ?",
     [TRANSFER_KIND, cutoff, limit],
   );
