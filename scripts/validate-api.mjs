@@ -518,6 +518,24 @@ const checks = [
     },
   ],
   [
+    "/api/v1/accounts/5G9hfkx9wGB1CLMT9WXkpHSAiYzjZb5o1Boyq4KAdDhjwrc5/registrations?window=30d",
+    (body) => {
+      assert.equal(body.data.window, "30d");
+      assert.equal(typeof body.data.total_registrations, "number");
+      assert.equal(Array.isArray(body.data.subnets), true);
+      assert.equal(typeof body.data.subnet_count, "number");
+    },
+  ],
+  [
+    "/api/v1/accounts/5G9hfkx9wGB1CLMT9WXkpHSAiYzjZb5o1Boyq4KAdDhjwrc5/serving?window=30d",
+    (body) => {
+      assert.equal(body.data.window, "30d");
+      assert.equal(typeof body.data.total_announcements, "number");
+      assert.equal(Array.isArray(body.data.subnets), true);
+      assert.equal(typeof body.data.subnet_count, "number");
+    },
+  ],
+  [
     "/api/v1/accounts/5G9hfkx9wGB1CLMT9WXkpHSAiYzjZb5o1Boyq4KAdDhjwrc5/subnets",
     (body) => {
       assert.equal(Array.isArray(body.data.subnets), true);
@@ -708,6 +726,16 @@ const checks = [
     },
   ],
   [
+    "/api/v1/chain/weights/setters",
+    (body) => {
+      assert.equal(body.data.schema_version, 1);
+      assert.equal(typeof body.data.distinct_setters, "number");
+      assert.equal(typeof body.data.weight_sets, "number");
+      assert.equal(typeof body.data.setter_count, "number");
+      assert.equal(Array.isArray(body.data.setters), true);
+    },
+  ],
+  [
     "/api/v1/chain/serving",
     (body) => {
       assert.equal(body.data.schema_version, 1);
@@ -723,6 +751,20 @@ const checks = [
   ],
   [
     "/api/v1/chain/prometheus",
+    (body) => {
+      assert.equal(body.data.schema_version, 1);
+      assert.equal(typeof body.data.subnet_count, "number");
+      assert.equal(typeof body.data.network, "object");
+      assert.equal(
+        body.data.intensity_distribution === null ||
+          typeof body.data.intensity_distribution === "object",
+        true,
+      );
+      assert.equal(Array.isArray(body.data.subnets), true);
+    },
+  ],
+  [
+    "/api/v1/chain/axon-removals",
     (body) => {
       assert.equal(body.data.schema_version, 1);
       assert.equal(typeof body.data.subnet_count, "number");

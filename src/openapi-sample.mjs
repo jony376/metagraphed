@@ -431,6 +431,94 @@ function normalizeChainServingSample(out) {
   return out;
 }
 
+function normalizeChainWeightSettersSample(out) {
+  if (
+    !out ||
+    typeof out !== "object" ||
+    "netuid" in out || // excludes the per-subnet SubnetWeightSettersArtifact sibling shape
+    !("distinct_setters" in out) ||
+    !("weight_sets" in out) ||
+    !Array.isArray(out.setters)
+  ) {
+    return out;
+  }
+  // An internally consistent worked example: two setters whose WeightsSet counts (30 and 10) sum
+  // to the network total of 40, so their shares read 30/40 = 0.75 and 10/40 = 0.25. The generic
+  // per-field generator cannot satisfy this weight_sets/total ratio on its own.
+  out.setters = [
+    {
+      hotkey: "5G9hfkx9wGB1CLMT9WXkpHSAiYzjZb5o1Boyq4KAdDhjwrc5",
+      uid: 3,
+      weight_sets: 30,
+      share: 0.75,
+      first_set_at: ISO,
+      last_set_at: ISO,
+    },
+    {
+      hotkey: null,
+      uid: 8,
+      weight_sets: 10,
+      share: 0.25,
+      first_set_at: ISO,
+      last_set_at: ISO,
+    },
+  ];
+  out.distinct_setters = 2;
+  out.weight_sets = 40;
+  out.setter_count = 2;
+  return out;
+}
+
+function normalizeChainAxonRemovalsSample(out) {
+  if (
+    !out ||
+    typeof out !== "object" ||
+    !out.network ||
+    typeof out.network !== "object" ||
+    !("removals_per_remover" in out.network) ||
+    !("removals" in out.network) ||
+    !Array.isArray(out.subnets)
+  ) {
+    return out;
+  }
+  // An internally consistent worked example: two subnets whose removers emit 40 and 30
+  // AxonInfoRemoved events, so removals_per_remover reads 40/4 = 10 and 30/2 = 15; the network
+  // rollup uses the true distinct remover count (5, below the 6 per-subnet sum because a remover
+  // removes an axon on both subnets), total 40 + 30 = 70 give 70/5 = 14, and the distribution
+  // summarizes [10, 15]. The generic per-field generator cannot satisfy these events/removers ratios itself.
+  out.subnets = [
+    {
+      netuid: 1,
+      distinct_removers: 4,
+      removals: 40,
+      removals_per_remover: 10,
+    },
+    {
+      netuid: 2,
+      distinct_removers: 2,
+      removals: 30,
+      removals_per_remover: 15,
+    },
+  ];
+  out.network = {
+    distinct_removers: 5,
+    removals: 70,
+    removals_per_remover: 14,
+  };
+  out.subnet_count = 2;
+  out.intensity_distribution = {
+    count: 2,
+    mean: 12.5,
+    min: 10,
+    p25: 10,
+    median: 10,
+    p75: 15,
+    p90: 15,
+    max: 15,
+  };
+  return out;
+}
+
 function normalizeChainPrometheusSample(out) {
   if (
     !out ||
@@ -639,8 +727,10 @@ function normalizeObjectSample(out) {
   normalizeChainTransfersSample(out);
   normalizeChainTransferPairsSample(out);
   normalizeChainWeightsSample(out);
+  normalizeChainWeightSettersSample(out);
   normalizeChainServingSample(out);
   normalizeChainPrometheusSample(out);
+  normalizeChainAxonRemovalsSample(out);
   normalizeChainRegistrationsSample(out);
   normalizeChainDeregistrationsSample(out);
   normalizeChainStakeMovesSample(out);

@@ -2625,6 +2625,110 @@
         },
         "additionalProperties": false
       },
+      "AccountServingArtifact": {
+        "type": "object",
+        "description": "One account's axon-serving footprint per subnet over a recent window, from the account_events AxonServed stream: per-subnet announcement count with the first/last announcement timestamps, plus account totals, an HHI concentration of where its serving activity is focused, and the dominant subnet. Operational activity (announcing an axon endpoint) — the account-level companion to /api/v1/chain/serving and /api/v1/subnets/{netuid}/serving, orthogonal to /accounts/{ss58}/subnets (registration state) and /accounts/{ss58}/registrations (registration events).",
+        "required": [
+          "schema_version",
+          "address",
+          "window",
+          "total_announcements",
+          "subnet_count",
+          "concentration",
+          "dominant_netuid",
+          "subnets"
+        ],
+        "properties": {
+          "schema_version": { "type": "integer" },
+          "address": { "type": "string" },
+          "window": {
+            "type": ["string", "null"],
+            "enum": ["7d", "30d", "90d", null]
+          },
+          "total_announcements": { "type": "integer", "minimum": 0 },
+          "subnet_count": { "type": "integer", "minimum": 0 },
+          "concentration": { "type": ["number", "null"] },
+          "dominant_netuid": { "type": ["integer", "null"], "minimum": 0 },
+          "subnets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "netuid",
+                "announcements",
+                "first_served_at",
+                "last_served_at"
+              ],
+              "properties": {
+                "netuid": { "type": "integer", "minimum": 0 },
+                "announcements": { "type": "integer", "minimum": 0 },
+                "first_served_at": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                },
+                "last_served_at": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AccountRegistrationsArtifact": {
+        "type": "object",
+        "description": "One account's neuron-registration footprint per subnet over a recent window, from the account_events NeuronRegistered stream: per-subnet registration count with the first/last registration timestamps, plus account totals, an HHI concentration of where its registration activity is focused, and the dominant subnet. Windowed registration EVENTS (including re-registrations after a deregistration) — the account-level companion to /api/v1/chain/registrations and /api/v1/subnets/{netuid}/registrations, distinct from /accounts/{ss58}/subnets (current registration state).",
+        "required": [
+          "schema_version",
+          "address",
+          "window",
+          "total_registrations",
+          "subnet_count",
+          "concentration",
+          "dominant_netuid",
+          "subnets"
+        ],
+        "properties": {
+          "schema_version": { "type": "integer" },
+          "address": { "type": "string" },
+          "window": {
+            "type": ["string", "null"],
+            "enum": ["7d", "30d", "90d", null]
+          },
+          "total_registrations": { "type": "integer", "minimum": 0 },
+          "subnet_count": { "type": "integer", "minimum": 0 },
+          "concentration": { "type": ["number", "null"] },
+          "dominant_netuid": { "type": ["integer", "null"], "minimum": 0 },
+          "subnets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "netuid",
+                "registrations",
+                "first_registered_at",
+                "last_registered_at"
+              ],
+              "properties": {
+                "netuid": { "type": "integer", "minimum": 0 },
+                "registrations": { "type": "integer", "minimum": 0 },
+                "first_registered_at": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                },
+                "last_registered_at": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "AccountSubnetsArtifact": {
         "type": "object",
         "additionalProperties": true,
@@ -3318,6 +3422,148 @@
                 "distinct_servers": { "type": "integer", "minimum": 0 },
                 "announcements": { "type": "integer", "minimum": 0 },
                 "announcements_per_server": {
+                  "type": ["number", "null"],
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChainWeightSettersArtifact": {
+        "type": "object",
+        "description": "Network-wide weight-setter leaderboard over a 7d/30d window: the individual validators driving consensus across EVERY subnet, ranked by activity, each with its total WeightsSet count (summed across every subnet it operates on), its share of the network total, and its first/last set time. The network-wide companion to /api/v1/subnets/{netuid}/weights/setters (the same relationship /api/v1/chain/weights has to /api/v1/subnets/{netuid}/weights), served live from the account_events WeightsSet stream at /api/v1/chain/weights/setters (no static file); an empty leaderboard when cold.",
+        "required": [
+          "schema_version",
+          "window",
+          "observed_at",
+          "distinct_setters",
+          "weight_sets",
+          "setter_count",
+          "setters"
+        ],
+        "properties": {
+          "schema_version": { "type": "integer" },
+          "window": {
+            "type": ["string", "null"],
+            "enum": ["7d", "30d", null]
+          },
+          "observed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "distinct_setters": { "type": "integer", "minimum": 0 },
+          "weight_sets": { "type": "integer", "minimum": 0 },
+          "setter_count": { "type": "integer", "minimum": 0 },
+          "setters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "hotkey",
+                "uid",
+                "weight_sets",
+                "share",
+                "first_set_at",
+                "last_set_at"
+              ],
+              "properties": {
+                "hotkey": { "type": ["string", "null"] },
+                "uid": { "type": ["integer", "null"], "minimum": 0 },
+                "weight_sets": { "type": "integer", "minimum": 0 },
+                "share": { "type": ["number", "null"], "minimum": 0 },
+                "first_set_at": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                },
+                "last_set_at": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChainAxonRemovalsArtifact": {
+        "type": "object",
+        "description": "Network-wide axon-removal activity over a 7d/30d window across the subnets with observed removal activity: a per-subnet leaderboard (distinct removers, AxonInfoRemoved count, removals per remover) plus a network rollup with the true distinct remover count and a distribution of per-subnet re-teardown intensity. The teardown-side companion to /api/v1/chain/serving (axon announcements) and the network-wide companion to /api/v1/subnets/{netuid}/axon-removals, served live from the account_events AxonInfoRemoved stream at /api/v1/chain/axon-removals (no static file); subnet_count 0 and the leaderboard empty when cold.",
+        "required": [
+          "schema_version",
+          "window",
+          "observed_at",
+          "subnet_count",
+          "network",
+          "intensity_distribution",
+          "subnets"
+        ],
+        "properties": {
+          "schema_version": { "type": "integer" },
+          "window": { "type": ["string", "null"], "enum": ["7d", "30d", null] },
+          "observed_at": { "type": ["string", "null"], "format": "date-time" },
+          "subnet_count": { "type": "integer", "minimum": 0 },
+          "intensity_distribution": {
+            "type": ["object", "null"],
+            "description": "Spread of the per-subnet removals-per-remover intensity across the subnets that removed an axon in the window (null when no subnet removed one). subnet_count and this distribution cover only subnets with observed AxonInfoRemoved activity, not every registered subnet.",
+            "required": [
+              "count",
+              "mean",
+              "min",
+              "p25",
+              "median",
+              "p75",
+              "p90",
+              "max"
+            ],
+            "properties": {
+              "count": { "type": "integer", "minimum": 0 },
+              "mean": { "type": "number", "minimum": 0 },
+              "min": { "type": "number", "minimum": 0 },
+              "p25": { "type": "number", "minimum": 0 },
+              "median": { "type": "number", "minimum": 0 },
+              "p75": { "type": "number", "minimum": 0 },
+              "p90": { "type": "number", "minimum": 0 },
+              "max": { "type": "number", "minimum": 0 }
+            },
+            "additionalProperties": false
+          },
+          "network": {
+            "type": "object",
+            "description": "Rollup over the window: the true distinct removers across all subnets (a hotkey removing an axon on several subnets counts once, so NOT the sum of the per-subnet counts), total AxonInfoRemoved events, and the network removals-per-remover intensity (null when no axon was removed).",
+            "required": [
+              "distinct_removers",
+              "removals",
+              "removals_per_remover"
+            ],
+            "properties": {
+              "distinct_removers": { "type": "integer", "minimum": 0 },
+              "removals": { "type": "integer", "minimum": 0 },
+              "removals_per_remover": {
+                "type": ["number", "null"],
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "subnets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "netuid",
+                "distinct_removers",
+                "removals",
+                "removals_per_remover"
+              ],
+              "properties": {
+                "netuid": { "type": "integer", "minimum": 0 },
+                "distinct_removers": { "type": "integer", "minimum": 0 },
+                "removals": { "type": "integer", "minimum": 0 },
+                "removals_per_remover": {
                   "type": ["number", "null"],
                   "minimum": 0
                 }

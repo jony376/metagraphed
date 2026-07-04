@@ -710,6 +710,141 @@ describe("sampleFromSchema", () => {
     assert.notEqual(untouched.network.announcements, 70);
   });
 
+  test("chain weight-setters samples keep share consistent with weight_sets/total", () => {
+    const setterProps = {
+      hotkey: { type: ["string", "null"] },
+      uid: { type: ["integer", "null"] },
+      weight_sets: { type: "integer" },
+      share: { type: ["number", "null"] },
+      first_set_at: { type: ["string", "null"], format: "date-time" },
+      last_set_at: { type: ["string", "null"], format: "date-time" },
+    };
+    const weightSettersSchema = {
+      type: "object",
+      required: [
+        "schema_version",
+        "window",
+        "observed_at",
+        "distinct_setters",
+        "weight_sets",
+        "setter_count",
+        "setters",
+      ],
+      properties: {
+        schema_version: { type: "integer" },
+        window: { type: "string" },
+        observed_at: { type: "string", format: "date-time" },
+        distinct_setters: { type: "integer" },
+        weight_sets: { type: "integer" },
+        setter_count: { type: "integer" },
+        setters: {
+          type: "array",
+          items: { type: "object", properties: setterProps },
+        },
+      },
+    };
+    const sample = s(weightSettersSchema, "data");
+
+    // The worked example is internally consistent: each setter's share equals its weight_sets
+    // divided by the network-wide weight_sets total.
+    for (const setter of sample.setters) {
+      assert.equal(setter.share, setter.weight_sets / sample.weight_sets);
+    }
+    assert.equal(sample.setter_count, sample.setters.length);
+
+    // A shape carrying `netuid` is the per-subnet SubnetWeightSettersArtifact sibling, not this
+    // network-wide artifact, and must be left untouched (guard branch).
+    const subnetShaped = JSON.parse(JSON.stringify(weightSettersSchema));
+    subnetShaped.required = [...subnetShaped.required, "netuid"];
+    subnetShaped.properties.netuid = { type: "integer" };
+    const untouched = s(subnetShaped, "data");
+    assert.notEqual(untouched.weight_sets, 40);
+  });
+
+  test("chain axon-removals samples keep removals-per-remover consistent", () => {
+    const removerProps = {
+      distinct_removers: { type: "integer" },
+      removals: { type: "integer" },
+      removals_per_remover: { type: ["number", "null"] },
+    };
+    const axonRemovalsSchema = {
+      type: "object",
+      required: [
+        "schema_version",
+        "window",
+        "observed_at",
+        "subnet_count",
+        "network",
+        "intensity_distribution",
+        "subnets",
+      ],
+      properties: {
+        schema_version: { type: "integer" },
+        window: { type: "string" },
+        observed_at: { type: "string", format: "date-time" },
+        subnet_count: { type: "integer" },
+        network: {
+          type: "object",
+          required: ["distinct_removers", "removals", "removals_per_remover"],
+          properties: removerProps,
+        },
+        intensity_distribution: {
+          type: ["object", "null"],
+          properties: {
+            count: { type: "integer" },
+            mean: { type: "number" },
+            min: { type: "number" },
+            p25: { type: "number" },
+            median: { type: "number" },
+            p75: { type: "number" },
+            p90: { type: "number" },
+            max: { type: "number" },
+          },
+        },
+        subnets: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [
+              "netuid",
+              "distinct_removers",
+              "removals",
+              "removals_per_remover",
+            ],
+            properties: { netuid: { type: "integer" }, ...removerProps },
+          },
+        },
+      },
+    };
+    const sample = s(axonRemovalsSchema, "data");
+
+    // The worked example is internally consistent: each subnet's removals_per_remover equals its
+    // AxonInfoRemoved count divided by its distinct removers, and the network rollup does the same.
+    for (const subnet of sample.subnets) {
+      assert.equal(
+        subnet.removals_per_remover,
+        subnet.removals / subnet.distinct_removers,
+      );
+    }
+    assert.equal(
+      sample.network.removals_per_remover,
+      sample.network.removals / sample.network.distinct_removers,
+    );
+    assert.equal(sample.subnet_count, sample.subnets.length);
+    assert.equal(sample.intensity_distribution.count, sample.subnets.length);
+
+    // A shape whose network lacks removals_per_remover is not an axon-removals artifact and is left
+    // untouched (guard branch).
+    const notRemovals = JSON.parse(JSON.stringify(axonRemovalsSchema));
+    delete notRemovals.properties.network.properties.removals_per_remover;
+    notRemovals.properties.network.required =
+      notRemovals.properties.network.required.filter(
+        (key) => key !== "removals_per_remover",
+      );
+    const untouched = s(notRemovals, "data");
+    assert.notEqual(untouched.network.removals, 70);
+  });
+
   test("chain registration samples keep registrations-per-registrant consistent", () => {
     const registrantProps = {
       distinct_registrants: { type: "integer" },

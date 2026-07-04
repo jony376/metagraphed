@@ -54,8 +54,10 @@ import {
   handleChainTransfers,
   handleChainStakeFlow,
   handleChainWeights,
+  handleChainWeightSetters,
   handleChainServing,
   handleChainPrometheus,
+  handleChainAxonRemovals,
   handleChainRegistrations,
   handleChainDeregistrations,
   handleChainStakeMoves,
@@ -139,6 +141,8 @@ import {
   handleAccountTransfers,
   handleAccountCounterparties,
   handleAccountStakeFlow,
+  handleAccountRegistrations,
+  handleAccountServing,
   handleAccountSubnets,
   handleAccountPortfolio,
   handleBlocks,
@@ -275,6 +279,8 @@ import {
   ACCOUNT_TRANSFERS_PATH_PATTERN,
   ACCOUNT_COUNTERPARTIES_PATH_PATTERN,
   ACCOUNT_STAKE_FLOW_PATH_PATTERN,
+  ACCOUNT_REGISTRATIONS_PATH_PATTERN,
+  ACCOUNT_SERVING_PATH_PATTERN,
   ACCOUNT_PATH_PATTERN,
   ACCOUNT_SUBNETS_PATH_PATTERN,
   ACCOUNT_PORTFOLIO_PATH_PATTERN,
@@ -1937,6 +1943,28 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         resolved.url,
       );
     }
+    const accountRegistrationsMatch = ACCOUNT_REGISTRATIONS_PATH_PATTERN.exec(
+      resolved.url.pathname,
+    );
+    if (accountRegistrationsMatch) {
+      return handleAccountRegistrations(
+        request,
+        env,
+        accountRegistrationsMatch[1],
+        resolved.url,
+      );
+    }
+    const accountServingMatch = ACCOUNT_SERVING_PATH_PATTERN.exec(
+      resolved.url.pathname,
+    );
+    if (accountServingMatch) {
+      return handleAccountServing(
+        request,
+        env,
+        accountServingMatch[1],
+        resolved.url,
+      );
+    }
     const accountBalanceMatch = ACCOUNT_BALANCE_PATH_PATTERN.exec(
       resolved.url.pathname,
     );
@@ -2024,11 +2052,17 @@ export async function handleRequest(request, env = {}, ctx = {}) {
     if (resolved.url.pathname === "/api/v1/chain/weights") {
       return handleChainWeights(request, env, resolved.url, ctx);
     }
+    if (resolved.url.pathname === "/api/v1/chain/weights/setters") {
+      return handleChainWeightSetters(request, env, resolved.url, ctx);
+    }
     if (resolved.url.pathname === "/api/v1/chain/serving") {
       return handleChainServing(request, env, resolved.url, ctx);
     }
     if (resolved.url.pathname === "/api/v1/chain/prometheus") {
       return handleChainPrometheus(request, env, resolved.url, ctx);
+    }
+    if (resolved.url.pathname === "/api/v1/chain/axon-removals") {
+      return handleChainAxonRemovals(request, env, resolved.url, ctx);
     }
     if (resolved.url.pathname === "/api/v1/chain/registrations") {
       return handleChainRegistrations(request, env, resolved.url, ctx);
@@ -2189,8 +2223,10 @@ function isMainnetOnlyApiPath(pathname) {
     pathname === "/api/v1/chain/transfer-pairs" ||
     pathname === "/api/v1/chain/stake-flow" ||
     pathname === "/api/v1/chain/weights" ||
+    pathname === "/api/v1/chain/weights/setters" ||
     pathname === "/api/v1/chain/serving" ||
     pathname === "/api/v1/chain/prometheus" ||
+    pathname === "/api/v1/chain/axon-removals" ||
     pathname === "/api/v1/chain/registrations" ||
     pathname === "/api/v1/chain/deregistrations" ||
     pathname === "/api/v1/chain/stake-moves" ||
@@ -2234,6 +2270,8 @@ function isMainnetOnlyApiPath(pathname) {
     ACCOUNT_TRANSFERS_PATH_PATTERN.test(pathname) ||
     ACCOUNT_COUNTERPARTIES_PATH_PATTERN.test(pathname) ||
     ACCOUNT_STAKE_FLOW_PATH_PATTERN.test(pathname) ||
+    ACCOUNT_REGISTRATIONS_PATH_PATTERN.test(pathname) ||
+    ACCOUNT_SERVING_PATH_PATTERN.test(pathname) ||
     ACCOUNT_BALANCE_PATH_PATTERN.test(pathname) ||
     BLOCKS_FEED_PATH_PATTERN.test(pathname) ||
     BLOCK_DETAIL_PATH_PATTERN.test(pathname) ||

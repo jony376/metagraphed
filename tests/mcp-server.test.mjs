@@ -3245,6 +3245,132 @@ describe("MCP get_subnet_event_summary", () => {
   });
 });
 
+describe("MCP get_subnet_stake_moves", () => {
+  function stakeMovesD1(row = null, capture = []) {
+    return {
+      METAGRAPH_HEALTH_DB: {
+        prepare(sql) {
+          return {
+            bind(...params) {
+              capture.push({ sql, params });
+              return {
+                async all() {
+                  return { results: row ? [row] : [] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+  }
+
+  test("summarizes per-subnet stake-movement activity", async () => {
+    const res = await callTool(
+      "get_subnet_stake_moves",
+      { netuid: 5, window: "7d" },
+      {
+        env: stakeMovesD1({
+          movements: 9,
+          distinct_movers: 3,
+          newest_observed: 1_717_500_000_000,
+        }),
+      },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.netuid, 5);
+    assert.equal(out.movements, 9);
+    assert.equal(out.distinct_movers, 3);
+  });
+
+  test("cold subnet degrades to a schema-stable empty summary", async () => {
+    const res = await callTool(
+      "get_subnet_stake_moves",
+      { netuid: 5 },
+      { env: stakeMovesD1(null) },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.movements, 0);
+    assert.equal(out.distinct_movers, 0);
+  });
+
+  test("rejects an unsupported window", async () => {
+    const res = await callTool("get_subnet_stake_moves", {
+      netuid: 5,
+      window: "1y",
+    });
+    assert.equal(res.body.result.isError, true);
+  });
+
+  test("rejects a missing netuid", async () => {
+    const res = await callTool("get_subnet_stake_moves", { window: "7d" });
+    assert.equal(res.body.result.isError, true);
+  });
+});
+
+describe("MCP get_subnet_registrations", () => {
+  function registrationsSubnetD1(row = null, capture = []) {
+    return {
+      METAGRAPH_HEALTH_DB: {
+        prepare(sql) {
+          return {
+            bind(...params) {
+              capture.push({ sql, params });
+              return {
+                async all() {
+                  return { results: row ? [row] : [] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+  }
+
+  test("summarizes per-subnet registration activity", async () => {
+    const res = await callTool(
+      "get_subnet_registrations",
+      { netuid: 5, window: "7d" },
+      {
+        env: registrationsSubnetD1({
+          registrations: 12,
+          distinct_registrants: 4,
+          newest_observed: 1_717_500_000_000,
+        }),
+      },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.netuid, 5);
+    assert.equal(out.registrations, 12);
+    assert.equal(out.distinct_registrants, 4);
+  });
+
+  test("cold subnet degrades to a schema-stable empty summary", async () => {
+    const res = await callTool(
+      "get_subnet_registrations",
+      { netuid: 5 },
+      { env: registrationsSubnetD1(null) },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.registrations, 0);
+    assert.equal(out.distinct_registrants, 0);
+  });
+
+  test("rejects an unsupported window", async () => {
+    const res = await callTool("get_subnet_registrations", {
+      netuid: 5,
+      window: "1y",
+    });
+    assert.equal(res.body.result.isError, true);
+  });
+
+  test("rejects a missing netuid", async () => {
+    const res = await callTool("get_subnet_registrations", { window: "7d" });
+    assert.equal(res.body.result.isError, true);
+  });
+});
+
 describe("MCP get_subnet_weight_setters", () => {
   // The loader runs two reads: the per-setter leaderboard (GROUP BY the
   // hotkey-or-uid identity) and the subnet-wide totals row. Route by SQL shape.
@@ -3418,6 +3544,141 @@ describe("MCP get_subnet_axon_removals", () => {
 
   test("rejects a missing netuid", async () => {
     const res = await callTool("get_subnet_axon_removals", { window: "7d" });
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /netuid/i);
+  });
+});
+
+describe("MCP get_subnet_deregistrations", () => {
+  function deregistrationsD1(row = null) {
+    return {
+      METAGRAPH_HEALTH_DB: {
+        prepare(_sql) {
+          return {
+            bind(..._params) {
+              return {
+                async all() {
+                  return { results: row ? [row] : [] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+  }
+
+  test("returns the deregistration scorecard", async () => {
+    const res = await callTool(
+      "get_subnet_deregistrations",
+      { netuid: 9 },
+      {
+        env: deregistrationsD1({
+          deregistrations: 8,
+          distinct_deregistered_hotkeys: 2,
+          newest_observed: 1_717_400_000_000,
+        }),
+      },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.netuid, 9);
+    assert.equal(out.window, "7d");
+    assert.equal(out.deregistrations, 8);
+    assert.equal(out.distinct_deregistered_hotkeys, 2);
+    assert.equal(out.deregistrations_per_hotkey, 4);
+  });
+
+  test("defaults to the 7d window and degrades to a zeroed card on cold D1", async () => {
+    const res = await callTool("get_subnet_deregistrations", { netuid: 9 });
+    const out = res.body.result.structuredContent;
+    assert.equal(out.window, "7d");
+    assert.equal(out.distinct_deregistered_hotkeys, 0);
+    assert.equal(out.deregistrations, 0);
+    assert.equal(out.deregistrations_per_hotkey, null);
+  });
+
+  test("rejects an unsupported window", async () => {
+    const res = await callTool("get_subnet_deregistrations", {
+      netuid: 9,
+      window: "90d",
+    });
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /window must be one of/);
+  });
+
+  test("rejects a missing netuid", async () => {
+    const res = await callTool("get_subnet_deregistrations", { window: "30d" });
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /netuid/i);
+  });
+});
+
+describe("MCP get_subnet_performance_history", () => {
+  function performanceHistoryD1(rows = []) {
+    return {
+      METAGRAPH_HEALTH_DB: {
+        prepare(_sql) {
+          return {
+            bind(..._params) {
+              return {
+                async all() {
+                  return { results: rows };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+  }
+
+  test("returns the per-day performance series", async () => {
+    const res = await callTool(
+      "get_subnet_performance_history",
+      { netuid: 7, window: "7d" },
+      {
+        env: performanceHistoryD1([
+          {
+            snapshot_date: "2026-06-25",
+            incentive: 0.1,
+            dividends: 0.2,
+            trust: 0.5,
+            consensus: 0.6,
+            validator_trust: 0.7,
+            validator_permit: 1,
+            active: 1,
+          },
+        ]),
+      },
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.netuid, 7);
+    assert.equal(out.window, "7d");
+    assert.equal(out.point_count, 1);
+    assert.equal(out.points[0].snapshot_date, "2026-06-25");
+  });
+
+  test("defaults to the 30d window on cold D1", async () => {
+    const res = await callTool("get_subnet_performance_history", { netuid: 7 });
+    const out = res.body.result.structuredContent;
+    assert.equal(out.window, "30d");
+    assert.equal(out.point_count, 0);
+    assert.deepEqual(out.points, []);
+  });
+
+  test("rejects an invalid window", async () => {
+    const res = await callTool("get_subnet_performance_history", {
+      netuid: 7,
+      window: "1y",
+    });
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /window must be one of/);
+  });
+
+  test("rejects a missing netuid", async () => {
+    const res = await callTool("get_subnet_performance_history", {
+      window: "7d",
+    });
     assert.equal(res.body.result.isError, true);
     assert.match(res.body.result.content[0].text, /netuid/i);
   });
@@ -10601,6 +10862,60 @@ describe("MCP parity tools — provider + discovery bundle (artifact-backed)", (
 
   test("list_evidence rejects an unexpected argument", async () => {
     const res = await callTool("list_evidence", { netuid: 7 });
+    assert.equal(res.body.result.isError, true);
+  });
+
+  test("list_rpc_endpoints returns the rpc endpoints artifact", async () => {
+    const deps = makeDeps({
+      "/metagraph/rpc-endpoints.json": {
+        generated_at: "2026-01-01T00:00:00Z",
+        endpoints: [{ url: "wss://rpc.example", network: "finney" }],
+      },
+    });
+    const res = await callTool("list_rpc_endpoints", {}, { deps });
+    const out = res.body.result.structuredContent;
+    assert.equal(out.endpoints[0].network, "finney");
+    assert.equal(out.generated_at, "2026-01-01T00:00:00Z");
+  });
+
+  test("list_rpc_endpoints rejects an unexpected argument", async () => {
+    const res = await callTool("list_rpc_endpoints", { netuid: 7 });
+    assert.equal(res.body.result.isError, true);
+  });
+
+  test("list_source_snapshots returns the source-snapshot artifact", async () => {
+    const deps = makeDeps({
+      "/metagraph/source-snapshots.json": {
+        generated_at: "2026-01-01T00:00:00Z",
+        sources: [{ id: "chain", hash: "0xabc", record_count: 42 }],
+      },
+    });
+    const res = await callTool("list_source_snapshots", {}, { deps });
+    const out = res.body.result.structuredContent;
+    assert.equal(out.sources[0].id, "chain");
+    assert.equal(out.generated_at, "2026-01-01T00:00:00Z");
+  });
+
+  test("list_source_snapshots rejects an unexpected argument", async () => {
+    const res = await callTool("list_source_snapshots", { netuid: 7 });
+    assert.equal(res.body.result.isError, true);
+  });
+
+  test("list_rpc_pools returns the rpc pools artifact", async () => {
+    const deps = makeDeps({
+      "/metagraph/rpc/pools.json": {
+        generated_at: "2026-01-01T00:00:00Z",
+        pools: [{ network: "finney", score: 0.98 }],
+      },
+    });
+    const res = await callTool("list_rpc_pools", {}, { deps });
+    const out = res.body.result.structuredContent;
+    assert.equal(out.pools[0].network, "finney");
+    assert.equal(out.generated_at, "2026-01-01T00:00:00Z");
+  });
+
+  test("list_rpc_pools rejects an unexpected argument", async () => {
+    const res = await callTool("list_rpc_pools", { netuid: 7 });
     assert.equal(res.body.result.isError, true);
   });
 
