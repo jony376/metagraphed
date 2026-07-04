@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { afterEach, describe, test } from "vitest";
 import {
   buildChainYield,
+  buildChainYieldHistory,
   yieldDistribution,
   loadChainYield,
+  loadChainYieldHistory,
+  parseChainYieldHistoryWindow,
 } from "../src/chain-yield.mjs";
 import { handleRequest } from "../workers/api.mjs";
 import { createLocalArtifactEnv } from "../scripts/lib.mjs";
@@ -341,5 +344,186 @@ describe("chain/yield edge cache", () => {
     // A non-null stamp resolver + 200 means the response was cached: proof the
     // stamp resolver arrow ran and returned the network captured_at.
     assert.equal(store.size, 1);
+  });
+});
+
+describe("parseChainYieldHistoryWindow", () => {
+  test("accepts 7d/30d/90d and defaults to 30d", () => {
+    assert.equal(parseChainYieldHistoryWindow("7d").days, 7);
+    assert.equal(parseChainYieldHistoryWindow(undefined).days, 30);
+  });
+
+  test("rejects an unsupported window", () => {
+    assert.ok(parseChainYieldHistoryWindow("1y").error);
+  });
+});
+
+describe("buildChainYieldHistory", () => {
+  test("groups neuron_daily rows by day across subnets", () => {
+    const data = buildChainYieldHistory(
+      [
+        {
+          snapshot_date: "2026-06-27",
+          stake_tao: 100,
+          emission_tao: 10,
+          validator_permit: 1,
+          netuid: 1,
+        },
+        {
+          snapshot_date: "2026-06-27",
+          stake_tao: 100,
+          emission_tao: 5,
+          validator_permit: 0,
+          netuid: 2,
+        },
+        {
+          snapshot_date: "2026-06-26",
+          stake_tao: 100,
+          emission_tao: 10,
+          validator_permit: 1,
+          netuid: 1,
+        },
+      ],
+      { window: "30d" },
+    );
+    assert.equal(data.window, "30d");
+    assert.equal(data.point_count, 2);
+    assert.equal(data.points[0].snapshot_date, "2026-06-27");
+    assert.equal(data.points[0].subnet_count, 2);
+    assert.equal(data.points[0].neuron_count, 2);
+    assert.ok(Math.abs(data.points[0].network_yield - 15 / 200) < 1e-6);
+    assert.equal(data.points[0].distribution.count, 2);
+  });
+
+  test("drops the oldest day when the read was row-capped", () => {
+    const data = buildChainYieldHistory(
+      [
+        {
+          snapshot_date: "2026-06-27",
+          stake_tao: 1,
+          emission_tao: 1,
+          netuid: 1,
+        },
+        {
+          snapshot_date: "2026-06-26",
+          stake_tao: 1,
+          emission_tao: 1,
+          netuid: 1,
+        },
+      ],
+      { window: "7d", capped: true },
+    );
+    assert.equal(data.point_count, 1);
+    assert.equal(data.points[0].snapshot_date, "2026-06-27");
+  });
+
+  test("returns an empty series on cold input", () => {
+    const data = buildChainYieldHistory([], { window: "7d" });
+    assert.equal(data.point_count, 0);
+    assert.deepEqual(data.points, []);
+  });
+});
+
+describe("loadChainYieldHistory", () => {
+  test("queries neuron_daily without a netuid filter", async () => {
+    const capture = [];
+    const d1 = async (sql, params) => {
+      capture.push({ sql, params });
+      return [
+        {
+          snapshot_date: "2026-06-27",
+          stake_tao: 100,
+          emission_tao: 10,
+          validator_permit: 1,
+          netuid: 7,
+        },
+      ];
+    };
+    const data = await loadChainYieldHistory(d1, {
+      windowLabel: "7d",
+      windowDays: 7,
+    });
+    assert.equal(data.point_count, 1);
+    assert.match(capture[0].sql, /FROM neuron_daily WHERE snapshot_date >= \?/);
+    assert.equal(capture[0].params.length, 2);
+  });
+});
+
+describe("GET /api/v1/chain/yield/history", () => {
+  function neuronDailyEnv(rows = []) {
+    return {
+      ...createLocalArtifactEnv(),
+      METAGRAPH_HEALTH_DB: {
+        prepare(sql) {
+          return {
+            bind: (..._params) => ({
+              all: () => {
+                if (/FROM neuron_daily/.test(sql)) {
+                  return Promise.resolve({ results: rows });
+                }
+                return Promise.resolve({ results: [] });
+              },
+            }),
+          };
+        },
+      },
+    };
+  }
+
+  test("returns a per-day network yield trend", async () => {
+    const res = await handleRequest(
+      new Request(
+        "https://api.metagraph.sh/api/v1/chain/yield/history?window=30d",
+      ),
+      neuronDailyEnv([
+        {
+          snapshot_date: "2026-06-27",
+          stake_tao: 100,
+          emission_tao: 10,
+          validator_permit: 1,
+          netuid: 1,
+        },
+      ]),
+      {},
+    );
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.data.window, "30d");
+    assert.equal(body.data.point_count, 1);
+    assert.equal(body.data.points[0].subnet_count, 1);
+  });
+
+  test("rejects an unsupported window with 400", async () => {
+    const res = await handleRequest(
+      new Request(
+        "https://api.metagraph.sh/api/v1/chain/yield/history?window=1y",
+      ),
+      neuronDailyEnv(),
+      {},
+    );
+    assert.equal(res.status, 400);
+  });
+
+  test("rejects an unexpected query parameter with 400", async () => {
+    const res = await handleRequest(
+      new Request(
+        "https://api.metagraph.sh/api/v1/chain/yield/history?bogus=1",
+      ),
+      neuronDailyEnv(),
+      {},
+    );
+    assert.equal(res.status, 400);
+  });
+
+  test("defaults to the 30d window on cold D1", async () => {
+    const res = await handleRequest(
+      new Request("https://api.metagraph.sh/api/v1/chain/yield/history"),
+      neuronDailyEnv(),
+      {},
+    );
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.data.window, "30d");
+    assert.equal(body.data.point_count, 0);
   });
 });

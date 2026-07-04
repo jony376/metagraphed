@@ -94,6 +94,8 @@ import {
   handleChainIdentityHistory,
   canonicalChainIdentityHistoryCachePath,
   handleChainYield,
+  handleChainYieldHistory,
+  canonicalChainYieldHistoryCachePath,
   canonicalSubnetHistoryCachePath,
   canonicalSubnetConcentrationHistoryCachePath,
   canonicalSubnetPerformanceHistoryCachePath,
@@ -2095,6 +2097,19 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         (edgeEnv) => readNeuronsCacheStamp(edgeEnv),
       );
     }
+    // GET /api/v1/chain/yield/history: per-day network-wide emission-yield trend
+    // across every subnet's neuron_daily rows — edge-cache keyed on the resolved
+    // window (like the sibling /subnets/{netuid}/yield/history route).
+    if (resolved.url.pathname === "/api/v1/chain/yield/history") {
+      return withEdgeCache(
+        request,
+        ctx,
+        env,
+        "chain-yield-history",
+        () => handleChainYieldHistory(request, env, resolved.url),
+        canonicalChainYieldHistoryCachePath(resolved.url),
+      );
+    }
     // GET /api/v1/chain/turnover: network-wide validator-set churn across all subnets,
     // neuron_daily-derived — edge-cache keyed on the resolved window/limit AND busted on the
     // newest neuron captured_at across ALL subnets (like chain/concentration + chain/performance),
@@ -2183,6 +2198,7 @@ function isMainnetOnlyApiPath(pathname) {
     pathname === "/api/v1/chain/performance" ||
     pathname === "/api/v1/chain/identity-history" ||
     pathname === "/api/v1/chain/yield" ||
+    pathname === "/api/v1/chain/yield/history" ||
     pathname === "/api/v1/chain/turnover" ||
     pathname === "/api/v1/blocks/summary" ||
     pathname === "/api/v1/economics/trends" ||

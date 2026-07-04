@@ -1224,6 +1224,38 @@
         },
         "additionalProperties": true
       },
+      "ChainYieldHistoryArtifact": {
+        "type": "object",
+        "description": "Per-day network-wide emission-yield trend (newest first) over a 7d/30d/90d window: the aggregate network return (total emission / total stake), the validator vs miner split, and the per-neuron return distribution. The time-series companion to /chain/yield and the network-wide twin of /subnets/{netuid}/yield/history. Computed live from the neuron_daily D1 rollup.",
+        "required": ["schema_version", "point_count", "points"],
+        "properties": {
+          "schema_version": { "type": "integer" },
+          "window": { "type": ["string", "null"] },
+          "point_count": { "type": "integer", "minimum": 0 },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["snapshot_date"],
+              "properties": {
+                "snapshot_date": { "type": "string" },
+                "subnet_count": { "type": "integer", "minimum": 0 },
+                "neuron_count": { "type": "integer", "minimum": 0 },
+                "validator_count": { "type": "integer", "minimum": 0 },
+                "miner_count": { "type": "integer", "minimum": 0 },
+                "network_yield": { "type": ["number", "null"] },
+                "validator_yield": { "type": ["number", "null"] },
+                "miner_yield": { "type": ["number", "null"] },
+                "distribution": {
+                  "$ref": "#/components/schemas/YieldDistribution"
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      },
       "SubnetYieldHistoryArtifact": {
         "type": "object",
         "description": "Per-day emission-yield distribution trend for one subnet (newest first) over a 7d/30d/90d window: the subnet-wide return plus the mean/median/p25/p75/p90 of the per-UID emission-per-stake yields. The return-rate twin of /concentration/history and the time-series companion to the /yield snapshot — the per-UID yield distribution (median/percentiles) is not reconstructable from the stake+emission totals in /history. Computed live from the neuron_daily D1 rollup.",

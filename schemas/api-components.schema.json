@@ -5241,6 +5241,83 @@
         ],
         "type": "object"
       },
+      "ChainYieldHistoryArtifact": {
+        "additionalProperties": true,
+        "description": "Per-day network-wide emission-yield trend (newest first) over a 7d/30d/90d window: the aggregate network return (total emission / total stake), the validator vs miner split, and the per-neuron return distribution. The time-series companion to /chain/yield and the network-wide twin of /subnets/{netuid}/yield/history. Computed live from the neuron_daily D1 rollup.",
+        "properties": {
+          "point_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "points": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "distribution": {
+                  "$ref": "#/components/schemas/YieldDistribution"
+                },
+                "miner_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "miner_yield": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "network_yield": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "neuron_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "snapshot_date": {
+                  "type": "string"
+                },
+                "subnet_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "validator_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "validator_yield": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "snapshot_date"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "type": "integer"
+          },
+          "window": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "point_count",
+          "points"
+        ],
+        "type": "object"
+      },
       "ChangelogArtifact": {
         "allOf": [
           {

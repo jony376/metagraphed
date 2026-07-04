@@ -735,6 +735,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chain/yield/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch the per-day network-wide emission-yield trend over a 7d/30d/90d window: the aggregate network return (total emission / total stake), the validator vs miner split, and the per-neuron return distribution, one point per day (computed live from the neuron_daily D1 rollup). The time-series companion to /chain/yield and the network-wide twin of /subnets/{netuid}/yield/history. */
+        get: operations["chainYieldHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/changelog": {
         parameters: {
             query?: never;
@@ -3477,6 +3494,27 @@ export interface components {
             total_stake_tao?: number;
             validator_count?: number;
             validator_yield?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Per-day network-wide emission-yield trend (newest first) over a 7d/30d/90d window: the aggregate network return (total emission / total stake), the validator vs miner split, and the per-neuron return distribution. The time-series companion to /chain/yield and the network-wide twin of /subnets/{netuid}/yield/history. Computed live from the neuron_daily D1 rollup. */
+        ChainYieldHistoryArtifact: {
+            point_count: number;
+            points: ({
+                distribution?: components["schemas"]["YieldDistribution"];
+                miner_count?: number;
+                miner_yield?: number | null;
+                network_yield?: number | null;
+                neuron_count?: number;
+                snapshot_date: string;
+                subnet_count?: number;
+                validator_count?: number;
+                validator_yield?: number | null;
+            } & {
+                [key: string]: unknown;
+            })[];
+            schema_version: number;
+            window?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -12301,6 +12339,114 @@ export interface operations {
                      */
                     "application/json": components["schemas"]["SuccessEnvelope"] & {
                         data?: components["schemas"]["ChainYieldArtifact"];
+                    };
+                };
+            };
+            /** @description ETag matched and the cached response is still valid. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query parameters were malformed or unsupported. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Artifact or API route was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description HTTP method is not supported. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unexpected backend error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    chainYieldHistory: {
+        parameters: {
+            query?: {
+                window?: "7d" | "30d" | "90d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical artifact wrapped in the Metagraphed API envelope. */
+            200: {
+                headers: {
+                    "cache-control": components["headers"]["CacheControl"];
+                    etag: components["headers"]["ETag"];
+                    "x-metagraph-contract-version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "point_count": 1,
+                     *         "points": [
+                     *           {
+                     *             "snapshot_date": "example"
+                     *           }
+                     *         ],
+                     *         "schema_version": 1,
+                     *         "window": "30d"
+                     *       },
+                     *       "meta": {
+                     *         "artifact_path": "example",
+                     *         "cache": "short",
+                     *         "contract_version": "2026-06-29.1",
+                     *         "generated_at": "2026-06-01T00:00:00.000Z",
+                     *         "pagination": {
+                     *           "collection": "example",
+                     *           "cursor": 1,
+                     *           "limit": 1,
+                     *           "next_cursor": 1,
+                     *           "order": "asc",
+                     *           "returned": 1,
+                     *           "sort": "example",
+                     *           "total": 1
+                     *         },
+                     *         "published_at": "2026-06-01T00:00:00.000Z",
+                     *         "source": "live-cron-prober",
+                     *         "stale_contract": {
+                     *           "built_under": "example",
+                     *           "live": "example"
+                     *         }
+                     *       },
+                     *       "ok": true,
+                     *       "schema_version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SuccessEnvelope"] & {
+                        data?: components["schemas"]["ChainYieldHistoryArtifact"];
                     };
                 };
             };

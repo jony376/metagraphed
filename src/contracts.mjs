@@ -1308,6 +1308,12 @@ export const PUBLIC_ARTIFACTS = [
     "ChainYieldArtifact",
   ),
   artifact(
+    "chain-yield-history",
+    "/metagraph/chain/yield/history.json",
+    "Per-day network-wide emission-yield trend (aggregate network return plus validator/miner split and the per-neuron return distribution) over a 7d/30d/90d window across every subnet, served live from the neuron_daily D1 rollup at /api/v1/chain/yield/history (no static file). The time-series companion to /chain/yield and the network-wide twin of /subnets/{netuid}/yield/history.",
+    "ChainYieldHistoryArtifact",
+  ),
+  artifact(
     "chain-turnover",
     "/metagraph/chain/turnover.json",
     "Network-wide validator-set turnover (churn) across all subnets between a window's start and end neuron_daily snapshots: each subnet's validators entered, exited, Jaccard retention, and a 0-100 stability score ranked into a leaderboard, a network rollup over the union of every subnet's validator hotkeys, and a distribution summary of the per-subnet stability scores (count, mean, min, p25, median, p75, p90, max), computed live from the neuron_daily D1 rollup at /api/v1/chain/turnover; pass ?format=csv to download the per-subnet leaderboard as CSV (no static file).",
@@ -2949,6 +2955,22 @@ export const API_ROUTES = [
     "short",
     ["chain", "analytics"],
     [],
+    [],
+  ),
+  route(
+    "chain-yield-history",
+    "GET",
+    "/api/v1/chain/yield/history",
+    "/metagraph/chain/yield/history.json",
+    "Fetch the per-day network-wide emission-yield trend over a 7d/30d/90d window: the aggregate network return (total emission / total stake), the validator vs miner split, and the per-neuron return distribution, one point per day (computed live from the neuron_daily D1 rollup). The time-series companion to /chain/yield and the network-wide twin of /subnets/{netuid}/yield/history.",
+    "short",
+    ["chain", "analytics"],
+    [
+      {
+        name: "window",
+        schema: { type: "string", enum: ["7d", "30d", "90d"] },
+      },
+    ],
     [],
   ),
   route(

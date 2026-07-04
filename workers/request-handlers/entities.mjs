@@ -112,7 +112,11 @@ import {
   parseConcentrationHistoryWindow,
 } from "../../src/concentration.mjs";
 import { loadChainPerformance } from "../../src/chain-performance.mjs";
-import { loadChainYield } from "../../src/chain-yield.mjs";
+import {
+  loadChainYield,
+  loadChainYieldHistory,
+  parseChainYieldHistoryWindow,
+} from "../../src/chain-yield.mjs";
 import {
   CHAIN_IDENTITY_HISTORY_LIMIT_DEFAULT,
   CHAIN_IDENTITY_HISTORY_LIMIT_MAX,
@@ -855,6 +859,37 @@ export async function handleChainYield(request, env, url) {
   );
 }
 
+// GET /api/v1/chain/yield/history?window=7d|30d|90d: per-day network-wide
+// emission-yield trend across EVERY subnet's neuron_daily rows — the aggregate
+// network return (total emission / total stake), the validator vs miner split,
+// and the per-neuron return distribution, one point per day. The time-series
+// companion to /chain/yield and the network-wide twin of
+// /subnets/{netuid}/yield/history. Cold/absent store → 200 with points:[].
+export async function handleChainYieldHistory(request, env, url) {
+  const validationError = validateQueryParams(url, ["window"]);
+  if (validationError) return analyticsQueryError(validationError);
+  const { label, days, error } = parseChainYieldHistoryWindow(
+    url.searchParams.get("window"),
+  );
+  if (error) return analyticsQueryError(error);
+  const data = await loadChainYieldHistory(d1Runner(env), {
+    windowLabel: label,
+    windowDays: days,
+  });
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: await metagraphMeta(
+        env,
+        "/metagraph/chain/yield/history.json",
+        data.points[0]?.snapshot_date ?? null,
+      ),
+    },
+    "short",
+  );
+}
+
 // Canonical edge-cache key for the network identity-history feed: normalize `?limit`
 // (its only response-changing param) to the default when omitted so a bare request
 // and an explicit-default request share one cache slot; an invalid limit falls
@@ -896,6 +931,10 @@ export function canonicalSubnetPerformanceHistoryCachePath(url) {
 
 export function canonicalSubnetYieldHistoryCachePath(url) {
   return canonicalWindowedCachePath(url, parseSubnetYieldHistoryWindow);
+}
+
+export function canonicalChainYieldHistoryCachePath(url) {
+  return canonicalWindowedCachePath(url, parseChainYieldHistoryWindow);
 }
 
 // Canonical edge-cache key for the subnet-turnover route (?window= via

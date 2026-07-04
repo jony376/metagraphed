@@ -27,6 +27,7 @@ import {
   handleSubnetConcentrationHistory,
   handleSubnetPerformanceHistory,
   handleSubnetYieldHistory,
+  handleChainYieldHistory,
   handleSubnetTurnover,
   handleSubnetStakeFlow,
   handleSubnetWeights,
@@ -316,6 +317,14 @@ function dbWith({
                     )
                   ) {
                     return { results: turnoverRows || [] };
+                  }
+                  // Network-wide neuron_daily history (chain yield/history).
+                  if (
+                    /FROM neuron_daily WHERE snapshot_date >= \? ORDER BY snapshot_date DESC LIMIT \?/.test(
+                      sql,
+                    )
+                  ) {
+                    return { results: neuronDailyHistory || [] };
                   }
                   // Raw per-day neuron_daily rows (concentration history).
                   if (
@@ -1628,6 +1637,77 @@ describe("handleSubnetYieldHistory", () => {
     assert.equal(boundNetuid, NETUID);
     assert.match(cutoff, /^\d{4}-\d{2}-\d{2}$/); // ISO day cutoff
     assert.equal(cap, 50_000); // YIELD_HISTORY_ROW_CAP
+  });
+});
+
+describe("handleChainYieldHistory", () => {
+  test("rejects an unsupported query param with 400", async () => {
+    const res = await handleChainYieldHistory(
+      req("/api/v1/chain/yield/history"),
+      emptyEnv(),
+      url("/api/v1/chain/yield/history?bogus=1"),
+    );
+    await errorJson(res);
+  });
+
+  test("rejects an out-of-range window with 400", async () => {
+    const res = await handleChainYieldHistory(
+      req("/api/v1/chain/yield/history"),
+      emptyEnv(),
+      url("/api/v1/chain/yield/history?window=1y"),
+    );
+    const body = await errorJson(res);
+    assert.equal(body.meta.parameter, "window");
+  });
+
+  test("returns schema-stable empty series on cold D1", async () => {
+    const body = await assertColdSchema(
+      handleChainYieldHistory,
+      req("/api/v1/chain/yield/history"),
+      emptyEnv(),
+      url("/api/v1/chain/yield/history"),
+    );
+    assert.equal(body.data.point_count, 0);
+    assert.deepEqual(body.data.points, []);
+    assert.equal(body.data.window, "30d");
+  });
+
+  test("happy path computes a per-day network yield trend", async () => {
+    const { env, captures } = dbWith({
+      neuronDailyHistory: [
+        {
+          snapshot_date: "2026-06-27",
+          stake_tao: 100,
+          emission_tao: 10,
+          validator_permit: 1,
+          netuid: 1,
+        },
+        {
+          snapshot_date: "2026-06-27",
+          stake_tao: 100,
+          emission_tao: 5,
+          validator_permit: 0,
+          netuid: 2,
+        },
+      ],
+    });
+    const body = await json(
+      await handleChainYieldHistory(
+        req("/api/v1/chain/yield/history"),
+        env,
+        url("/api/v1/chain/yield/history?window=30d"),
+      ),
+    );
+    assert.equal(body.data.window, "30d");
+    assert.equal(body.data.point_count, 1);
+    assert.equal(body.data.points[0].subnet_count, 2);
+    const idx = captures.sql.findIndex((s) =>
+      /FROM neuron_daily WHERE snapshot_date >= \? ORDER BY snapshot_date DESC LIMIT \?/.test(
+        s,
+      ),
+    );
+    assert.ok(idx !== -1);
+    assert.equal(captures.params[idx].length, 2);
   });
 });
 
