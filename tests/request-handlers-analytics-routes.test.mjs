@@ -813,6 +813,40 @@ describe("canonicalUptimeCachePath", () => {
     const raw = "/api/v1/subnets/7/uptime?window=7d";
     assert.equal(canonicalUptimeCachePath(url(raw)), raw);
   });
+
+  test("keys on min_samples so distinct thresholds do not share a cache entry", () => {
+    // min_samples is a HAVING row-filter: two thresholds return different rows and
+    // must NOT collapse to the same cache key (the bug this guards against).
+    const strict = canonicalUptimeCachePath(
+      url("/api/v1/subnets/7/uptime?min_samples=100"),
+    );
+    const loose = canonicalUptimeCachePath(
+      url("/api/v1/subnets/7/uptime?min_samples=0"),
+    );
+    assert.equal(strict, "/api/v1/subnets/7/uptime?window=90d&min_samples=100");
+    assert.equal(loose, "/api/v1/subnets/7/uptime?window=90d&min_samples=0");
+    assert.notEqual(strict, loose);
+  });
+
+  test("omits min_samples from the key when the param is absent", () => {
+    // A bare request (no filter) keeps the window-only key, distinct from any
+    // explicit ?min_samples= request.
+    assert.equal(
+      canonicalUptimeCachePath(url("/api/v1/subnets/7/uptime?window=1y")),
+      "/api/v1/subnets/7/uptime?window=1y",
+    );
+    assert.notEqual(
+      canonicalUptimeCachePath(url("/api/v1/subnets/7/uptime?window=1y")),
+      canonicalUptimeCachePath(
+        url("/api/v1/subnets/7/uptime?window=1y&min_samples=5"),
+      ),
+    );
+  });
+
+  test("falls back to raw search on an invalid min_samples value", () => {
+    const raw = "/api/v1/subnets/7/uptime?min_samples=-1";
+    assert.equal(canonicalUptimeCachePath(url(raw)), raw);
+  });
 });
 
 describe("canonicalEconomicsTrendsCachePath", () => {

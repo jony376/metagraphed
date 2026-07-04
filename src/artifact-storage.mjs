@@ -48,8 +48,14 @@ export const R2_ONLY_PATTERNS = [
   /^subnets\/(?:\d+|\{netuid\})\/stake-flow\.json$/,
   // Validator weight-setting activity: computed live from the account_events WeightsSet stream.
   /^subnets\/(?:\d+|\{netuid\})\/weights\.json$/,
+  // Per-subnet weight-setter leaderboard: computed live from the account_events WeightsSet stream.
+  /^subnets\/(?:\d+|\{netuid\})\/weights\/setters\.json$/,
   // Axon-serving announcement activity: computed live from the account_events AxonServed stream.
   /^subnets\/(?:\d+|\{netuid\})\/serving\.json$/,
+  // Prometheus-endpoint serving activity: computed live from the account_events PrometheusServed stream.
+  /^subnets\/(?:\d+|\{netuid\})\/prometheus\.json$/,
+  // Stake-movement (re-delegation) activity: computed live from the account_events StakeMoved stream.
+  /^subnets\/(?:\d+|\{netuid\})\/stake-moves\.json$/,
   // Neuron-registration activity: computed live from the account_events NeuronRegistered stream.
   /^subnets\/(?:\d+|\{netuid\})\/registrations\.json$/,
   // Per-UID emission yield distribution: computed live from the neurons snapshot.
@@ -132,6 +138,9 @@ export const R2_ONLY_PATTERNS = [
   // Network-wide windowed account_events summary across every subnet, computed live
   // from the account_events D1 tier at /api/v1/chain/event-summary — never a file.
   /^chain\/event-summary\.json$/,
+  // Network-wide stake-movement (re-delegation) activity across every subnet, computed live from
+  // the account_events StakeMoved stream at /api/v1/chain/stake-moves — never a file.
+  /^chain\/stake-moves\.json$/,
   // Network-wide concentration aggregated across every subnet's neurons, computed
   // live from the neurons D1 tier at /api/v1/chain/concentration — never a file.
   /^chain\/concentration\.json$/,

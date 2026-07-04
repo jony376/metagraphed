@@ -58,6 +58,7 @@ import {
   handleChainPrometheus,
   handleChainRegistrations,
   handleChainEventSummary,
+  handleChainStakeMoves,
   handleGlobalIncidents,
   loadGlobalIncidentsLedger,
   handleHealthIncidents,
@@ -99,8 +100,14 @@ import {
   canonicalSubnetStakeFlowCachePath,
   handleSubnetWeights,
   canonicalSubnetWeightsCachePath,
+  handleSubnetWeightSetters,
+  canonicalSubnetWeightSettersCachePath,
   handleSubnetServing,
   canonicalSubnetServingCachePath,
+  handleSubnetPrometheus,
+  canonicalSubnetPrometheusCachePath,
+  handleSubnetStakeMoves,
+  canonicalSubnetStakeMovesCachePath,
   handleSubnetRegistrations,
   canonicalSubnetRegistrationsCachePath,
   handleSubnetYield,
@@ -300,7 +307,10 @@ import {
   SUBNET_TURNOVER_PATH_PATTERN,
   SUBNET_STAKE_FLOW_PATH_PATTERN,
   SUBNET_WEIGHTS_PATH_PATTERN,
+  SUBNET_WEIGHT_SETTERS_PATH_PATTERN,
   SUBNET_SERVING_PATH_PATTERN,
+  SUBNET_PROMETHEUS_PATH_PATTERN,
+  SUBNET_STAKE_MOVES_PATH_PATTERN,
   SUBNET_REGISTRATIONS_PATH_PATTERN,
   SUBNET_YIELD_PATH_PATTERN,
   SUBNET_PERFORMANCE_PATH_PATTERN,
@@ -1461,6 +1471,27 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         canonicalSubnetStakeFlowCachePath(resolved.url),
       );
     }
+    const weightSettersMatch = SUBNET_WEIGHT_SETTERS_PATH_PATTERN.exec(
+      resolved.url.pathname,
+    );
+    if (weightSettersMatch) {
+      // Per-subnet weight-setter leaderboard — the individual validators behind /weights,
+      // computed live from account_events over the window; edge-cache like the sibling routes.
+      return withEdgeCache(
+        request,
+        ctx,
+        env,
+        "subnet-weight-setters",
+        () =>
+          handleSubnetWeightSetters(
+            request,
+            env,
+            Number(weightSettersMatch[1]),
+            resolved.url,
+          ),
+        canonicalSubnetWeightSettersCachePath(resolved.url),
+      );
+    }
     const weightsMatch = SUBNET_WEIGHTS_PATH_PATTERN.exec(
       resolved.url.pathname,
     );
@@ -1501,6 +1532,48 @@ export async function handleRequest(request, env = {}, ctx = {}) {
             resolved.url,
           ),
         canonicalSubnetServingCachePath(resolved.url),
+      );
+    }
+    const prometheusMatch = SUBNET_PROMETHEUS_PATH_PATTERN.exec(
+      resolved.url.pathname,
+    );
+    if (prometheusMatch) {
+      // Prometheus-endpoint serving activity summed live from account_events over the window —
+      // deterministic per request, edge-cache like the sibling serving route.
+      return withEdgeCache(
+        request,
+        ctx,
+        env,
+        "subnet-prometheus",
+        () =>
+          handleSubnetPrometheus(
+            request,
+            env,
+            Number(prometheusMatch[1]),
+            resolved.url,
+          ),
+        canonicalSubnetPrometheusCachePath(resolved.url),
+      );
+    }
+    const stakeMovesMatch = SUBNET_STAKE_MOVES_PATH_PATTERN.exec(
+      resolved.url.pathname,
+    );
+    if (stakeMovesMatch) {
+      // Stake-movement activity summed live from account_events over the window —
+      // deterministic per request, edge-cache like the sibling stake-flow route.
+      return withEdgeCache(
+        request,
+        ctx,
+        env,
+        "subnet-stake-moves",
+        () =>
+          handleSubnetStakeMoves(
+            request,
+            env,
+            Number(stakeMovesMatch[1]),
+            resolved.url,
+          ),
+        canonicalSubnetStakeMovesCachePath(resolved.url),
       );
     }
     const registrationsMatch = SUBNET_REGISTRATIONS_PATH_PATTERN.exec(
@@ -1866,6 +1939,9 @@ export async function handleRequest(request, env = {}, ctx = {}) {
     if (resolved.url.pathname === "/api/v1/chain/event-summary") {
       return handleChainEventSummary(request, env, resolved.url, ctx);
     }
+    if (resolved.url.pathname === "/api/v1/chain/stake-moves") {
+      return handleChainStakeMoves(request, env, resolved.url, ctx);
+    }
     // GET /api/v1/chain/concentration: network-wide neurons aggregate — edge-cache
     // busts on the newest neuron captured_at across ALL subnets, not the health
     // prober tick (like the per-subnet concentration route, but network-scoped).
@@ -2007,6 +2083,7 @@ function isMainnetOnlyApiPath(pathname) {
     pathname === "/api/v1/chain/prometheus" ||
     pathname === "/api/v1/chain/registrations" ||
     pathname === "/api/v1/chain/event-summary" ||
+    pathname === "/api/v1/chain/stake-moves" ||
     pathname === "/api/v1/chain/concentration" ||
     pathname === "/api/v1/chain/performance" ||
     pathname === "/api/v1/chain/identity-history" ||

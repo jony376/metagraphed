@@ -3,7 +3,7 @@ import { ROUTE_CSV_EXAMPLES } from "./csv-route-examples.mjs";
 import { DOMAIN_TAGS } from "./domain-tags.mjs";
 import { sampleFromSchema } from "./openapi-sample.mjs";
 
-export const CONTRACT_VERSION = "2026-07-03.2";
+export const CONTRACT_VERSION = "2026-07-04.1";
 export const SCHEMA_VERSION = 1;
 // The API + artifacts are served from the api subdomain; the bare apex
 // (metagraph.sh) is the metagraphed-ui UI. PRIMARY_DOMAIN drives the OpenAPI
@@ -960,10 +960,28 @@ export const PUBLIC_ARTIFACTS = [
     "SubnetWeightsArtifact",
   ),
   artifact(
+    "subnet-weight-setters",
+    "/metagraph/subnets/{netuid}/weights/setters.json",
+    "Per-subnet weight-setter leaderboard over a 7d or 30d window — the individual validators behind /weights, each with its WeightsSet count, share of the subnet total, and first/last set time, ranked by activity — served live from the account_events WeightsSet stream at /api/v1/subnets/{netuid}/weights/setters (no static file). The setter-level drill-in of /api/v1/subnets/{netuid}/weights.",
+    "SubnetWeightSettersArtifact",
+  ),
+  artifact(
     "subnet-serving",
     "/metagraph/subnets/{netuid}/serving.json",
     "Axon-serving announcement activity for one subnet over a 7d or 30d window — the distinct servers (hotkeys), AxonServed event count, and average announcements per server — served live from the account_events AxonServed stream at /api/v1/subnets/{netuid}/serving (no static file). The per-subnet drill-in of /api/v1/chain/serving.",
     "SubnetServingArtifact",
+  ),
+  artifact(
+    "subnet-prometheus",
+    "/metagraph/subnets/{netuid}/prometheus.json",
+    "Prometheus-endpoint serving activity for one subnet over a 7d or 30d window — the distinct exporters (hotkeys), PrometheusServed event count, and average announcements per exporter — served live from the account_events PrometheusServed stream at /api/v1/subnets/{netuid}/prometheus (no static file). The per-subnet drill-in of /api/v1/chain/prometheus and the telemetry-endpoint sibling of /api/v1/subnets/{netuid}/serving.",
+    "SubnetPrometheusArtifact",
+  ),
+  artifact(
+    "subnet-stake-moves",
+    "/metagraph/subnets/{netuid}/stake-moves.json",
+    "Stake-movement (re-delegation) activity for one subnet over a 7d or 30d window — the distinct movers (accounts), StakeMoved event count, and average movements per mover — served live from the account_events StakeMoved stream at /api/v1/subnets/{netuid}/stake-moves (no static file). The per-subnet drill-in of /api/v1/chain/stake-moves and the re-delegation-churn sibling of /api/v1/subnets/{netuid}/stake-flow (net capital flow); move_stake relocates stake between hotkeys/subnets without unstaking, so it is churn, not flow.",
+    "SubnetStakeMovesArtifact",
   ),
   artifact(
     "subnet-registrations",
@@ -1228,6 +1246,12 @@ export const PUBLIC_ARTIFACTS = [
     "/metagraph/chain/event-summary.json",
     "Network-wide windowed account_events summary across every subnet: counts by event kind and coarse category, distinct hotkey/coldkey counts, per-kind subnet reach, TAO/alpha sums where applicable, first/last evidence bounds, and a small newest-first evidence slice, served live from D1 at /api/v1/chain/event-summary (no static file). Companion to the per-subnet /subnets/{netuid}/event-summary route.",
     "ChainEventSummaryArtifact",
+  ),
+  artifact(
+    "chain-stake-moves",
+    "/metagraph/chain/stake-moves.json",
+    "Network-wide stake-movement (re-delegation) activity over a 7d or 30d window across the subnets with observed movement activity (subnets with no StakeMoved events are absent): each subnet's StakeMoved event count, distinct movers (accounts relocating stake), and average movements per mover ranked into a leaderboard, a network rollup with the true distinct mover count (not a per-subnet sum) and total movements, and a distribution summary of the per-subnet re-move intensity (count, mean, min, p25, median, p75, p90, max), computed live from the account_events StakeMoved stream at /api/v1/chain/stake-moves. The re-delegation-churn companion to the net-capital-flow /api/v1/chain/stake-flow — move_stake relocates stake between hotkeys/subnets without unstaking, so it is churn, not flow; pass ?format=csv to download the per-subnet leaderboard as CSV (no static file).",
+    "ChainStakeMovesArtifact",
   ),
   artifact(
     "chain-fees",
@@ -1955,11 +1979,44 @@ export const API_ROUTES = [
     [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
   ),
   route(
+    "subnet-weight-setters",
+    "GET",
+    "/api/v1/subnets/{netuid}/weights/setters",
+    "/metagraph/subnets/{netuid}/weights/setters.json",
+    "Fetch the per-subnet weight-setter leaderboard over a 7d or 30d window: the individual validators behind /weights ranked by activity, each with its WeightsSet count, its share of the subnet's total weight-setting, and when it first and last set weights in the window, computed live from the account_events WeightsSet stream. The setter-level drill-in of GET /api/v1/subnets/{netuid}/weights (which reports only the aggregate and never names the setters). Schema-stable empty leaderboard when the subnet has no WeightsSet events in the window.",
+    "short",
+    ["subnets", "analytics"],
+    [{ name: "window", schema: { type: "string", enum: ["7d", "30d"] } }],
+    [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
+  ),
+  route(
     "subnet-serving",
     "GET",
     "/api/v1/subnets/{netuid}/serving",
     "/metagraph/subnets/{netuid}/serving.json",
     "Fetch axon-serving announcement activity for one subnet over a 7d or 30d window: the distinct servers (hotkeys), the AxonServed event count, and the average announcements per server, computed live from the account_events AxonServed stream. The per-subnet drill-in of GET /api/v1/chain/serving (which ranks only the top-N subnets and cannot be queried by netuid). Schema-stable zeroed card when the subnet has no AxonServed events in the window.",
+    "short",
+    ["subnets", "analytics"],
+    [{ name: "window", schema: { type: "string", enum: ["7d", "30d"] } }],
+    [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
+  ),
+  route(
+    "subnet-prometheus",
+    "GET",
+    "/api/v1/subnets/{netuid}/prometheus",
+    "/metagraph/subnets/{netuid}/prometheus.json",
+    "Fetch Prometheus-endpoint serving activity for one subnet over a 7d or 30d window: the distinct exporters (hotkeys), the PrometheusServed event count, and the average announcements per exporter, computed live from the account_events PrometheusServed stream. The per-subnet drill-in of GET /api/v1/chain/prometheus (which ranks only the top-N subnets and cannot be queried by netuid) and the telemetry-endpoint sibling of GET /api/v1/subnets/{netuid}/serving (axon endpoints). Schema-stable zeroed card when the subnet has no PrometheusServed events in the window.",
+    "short",
+    ["subnets", "analytics"],
+    [{ name: "window", schema: { type: "string", enum: ["7d", "30d"] } }],
+    [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
+  ),
+  route(
+    "subnet-stake-moves",
+    "GET",
+    "/api/v1/subnets/{netuid}/stake-moves",
+    "/metagraph/subnets/{netuid}/stake-moves.json",
+    "Fetch stake-movement (re-delegation) activity for one subnet over a 7d or 30d window: the distinct movers (accounts), the StakeMoved event count, and the average movements per mover, computed live from the account_events StakeMoved stream. The per-subnet drill-in of GET /api/v1/chain/stake-moves (which ranks only the top-N subnets and cannot be queried by netuid) and the re-delegation-churn sibling of GET /api/v1/subnets/{netuid}/stake-flow (net capital flow) — move_stake relocates stake between hotkeys/subnets without unstaking, so it is churn, not flow. Schema-stable zeroed card when the subnet has no StakeMoved events in the window.",
     "short",
     ["subnets", "analytics"],
     [{ name: "window", schema: { type: "string", enum: ["7d", "30d"] } }],
@@ -2732,6 +2789,20 @@ export const API_ROUTES = [
       },
       { name: "limit", schema: { type: "integer", minimum: 1, maximum: 50 } },
     ],
+    [],
+  ),
+  route(
+    "chain-stake-moves",
+    "GET",
+    "/api/v1/chain/stake-moves",
+    "/metagraph/chain/stake-moves.json",
+    "Fetch network-wide stake-movement (re-delegation) activity over a 7d or 30d window across the subnets with observed movement activity (subnets with no StakeMoved events are absent): a per-subnet leaderboard (StakeMoved event count, distinct movers, and average movements per mover) ranked by total movements, a network rollup with the true distinct mover count (an account moving stake out of several subnets counts once) and total movements, and a distribution summary (count, mean, min, p25, median, p75, p90, max) of the per-subnet re-move intensity. `limit` caps the leaderboard (default 20, max 100). The re-delegation-churn companion to the net-capital-flow GET /api/v1/chain/stake-flow — move_stake relocates stake between hotkeys/subnets without unstaking, so it is churn, not flow. Computed live from the account_events StakeMoved stream; schema-stable empty block when cold. Pass ?format=csv to download the per-subnet leaderboard as CSV (the network rollup + intensity distribution stay JSON-only).",
+    "short",
+    ["chain", "analytics"],
+    csvRouteQuery([
+      { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
+      { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
+    ]),
     [],
   ),
   route(

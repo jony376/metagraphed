@@ -4466,6 +4466,160 @@
         ],
         "type": "object"
       },
+      "ChainStakeMovesArtifact": {
+        "additionalProperties": false,
+        "description": "Network-wide stake-movement (re-delegation) activity over a 7d/30d window across the subnets with observed movement activity: a per-subnet leaderboard (distinct movers, StakeMoved count, movements per mover) plus a network rollup with the true distinct mover count and a distribution of per-subnet re-move intensity. The re-delegation-churn companion to the net-capital-flow /api/v1/chain/stake-flow — StakeMoved is an account relocating stake between hotkeys/subnets (move_stake) without unstaking, so it measures churn, not flow; keyed on the origin subnet and moving account. Served live from the account_events StakeMoved stream at /api/v1/chain/stake-moves (no static file); subnet_count 0 and the leaderboard empty when cold.",
+        "properties": {
+          "intensity_distribution": {
+            "additionalProperties": false,
+            "description": "Spread of the per-subnet movements-per-mover intensity across the subnets that saw a move in the window (null when no subnet saw a move). subnet_count and this distribution cover only subnets with observed StakeMoved activity, not every registered subnet.",
+            "properties": {
+              "count": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "max": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "mean": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "median": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "min": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "p25": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "p75": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "p90": {
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "count",
+              "mean",
+              "min",
+              "p25",
+              "median",
+              "p75",
+              "p90",
+              "max"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "network": {
+            "additionalProperties": false,
+            "description": "Rollup over the window: the true distinct movers across all subnets (an account moving stake out of several subnets counts once, so NOT the sum of the per-subnet counts), total StakeMoved events, and the network movements-per-mover intensity (null when no stake moved).",
+            "properties": {
+              "distinct_movers": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "movements": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "movements_per_mover": {
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "distinct_movers",
+              "movements",
+              "movements_per_mover"
+            ],
+            "type": "object"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "type": "integer"
+          },
+          "subnet_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "subnets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "distinct_movers": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "movements": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "movements_per_mover": {
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "netuid": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "netuid",
+                "distinct_movers",
+                "movements",
+                "movements_per_mover"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "window": {
+            "enum": [
+              "7d",
+              "30d",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "window",
+          "observed_at",
+          "subnet_count",
+          "network",
+          "intensity_distribution",
+          "subnets"
+        ],
+        "type": "object"
+      },
       "ChainTransferPair": {
         "additionalProperties": false,
         "description": "One directed sender -> receiver pair on the chain-transfer-pairs leaderboard. Rows are well-formed non-self Balances.Transfer events with both account addresses and a non-negative amount.",
@@ -16364,6 +16518,62 @@
           "null"
         ]
       },
+      "SubnetPrometheusArtifact": {
+        "additionalProperties": false,
+        "description": "Per-subnet Prometheus-endpoint serving activity over a 7d/30d window: the distinct exporters (hotkeys), PrometheusServed event count, and announcements per exporter for ONE subnet. The per-subnet drill-in of /api/v1/chain/prometheus (which ranks only the top-N subnets and cannot be queried by netuid) and the telemetry-endpoint sibling of /api/v1/subnets/{netuid}/serving, served live from the account_events PrometheusServed stream at /api/v1/subnets/{netuid}/prometheus (no static file); zeroed when the subnet has no PrometheusServed events in the window.",
+        "properties": {
+          "announcements": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "announcements_per_exporter": {
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "distinct_exporters": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "netuid": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "type": "integer"
+          },
+          "window": {
+            "enum": [
+              "7d",
+              "30d",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "netuid",
+          "window",
+          "observed_at",
+          "distinct_exporters",
+          "announcements",
+          "announcements_per_exporter"
+        ],
+        "type": "object"
+      },
       "SubnetRegistrationsArtifact": {
         "additionalProperties": false,
         "description": "Per-subnet neuron-registration activity over a 7d/30d window: the distinct registrants (hotkeys), NeuronRegistered event count, and registrations per registrant for ONE subnet. Raw registration demand from the account_events NeuronRegistered stream — the companion to the neuron_daily validator-set churn in /api/v1/subnets/{netuid}/turnover (net snapshot change, not raw event volume) — served live at /api/v1/subnets/{netuid}/registrations (no static file); zeroed when the subnet has no NeuronRegistered events in the window.",
@@ -16578,6 +16788,62 @@
           "net_flow_tao",
           "stake_events",
           "unstake_events"
+        ],
+        "type": "object"
+      },
+      "SubnetStakeMovesArtifact": {
+        "additionalProperties": false,
+        "description": "Per-subnet stake-movement (re-delegation) activity over a 7d/30d window: the distinct movers (accounts), StakeMoved event count, and movements per mover for ONE subnet. The per-subnet drill-in of /api/v1/chain/stake-moves (which ranks only the top-N subnets and cannot be queried by netuid) and the re-delegation-churn sibling of /api/v1/subnets/{netuid}/stake-flow — StakeMoved relocates stake between hotkeys/subnets (move_stake) without unstaking, so it measures churn, not flow — served live from the account_events StakeMoved stream at /api/v1/subnets/{netuid}/stake-moves (no static file); zeroed when the subnet has no StakeMoved events in the window.",
+        "properties": {
+          "distinct_movers": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "movements": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "movements_per_mover": {
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "netuid": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "type": "integer"
+          },
+          "window": {
+            "enum": [
+              "7d",
+              "30d",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "netuid",
+          "window",
+          "observed_at",
+          "distinct_movers",
+          "movements",
+          "movements_per_mover"
         ],
         "type": "object"
       },
@@ -16974,6 +17240,115 @@
           "distinct_setters",
           "weight_sets",
           "sets_per_setter"
+        ],
+        "type": "object"
+      },
+      "SubnetWeightSettersArtifact": {
+        "additionalProperties": false,
+        "description": "Per-subnet weight-setter leaderboard over a 7d/30d window: the individual validators behind /weights ranked by activity, each with its WeightsSet count, its share of the subnet's total, and its first/last set time. The setter-level drill-in of /api/v1/subnets/{netuid}/weights, served live from the account_events WeightsSet stream at /api/v1/subnets/{netuid}/weights/setters (no static file); an empty leaderboard when the subnet has no WeightsSet events in the window.",
+        "properties": {
+          "distinct_setters": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "netuid": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "type": "integer"
+          },
+          "setter_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "setters": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "first_set_at": {
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "hotkey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "last_set_at": {
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "share": {
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "uid": {
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "weight_sets": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "hotkey",
+                "uid",
+                "weight_sets",
+                "share",
+                "first_set_at",
+                "last_set_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "weight_sets": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "window": {
+            "enum": [
+              "7d",
+              "30d",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "netuid",
+          "window",
+          "observed_at",
+          "distinct_setters",
+          "weight_sets",
+          "setter_count",
+          "setters"
         ],
         "type": "object"
       },

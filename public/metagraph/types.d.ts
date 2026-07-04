@@ -633,6 +633,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chain/stake-moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch network-wide stake-movement (re-delegation) activity over a 7d or 30d window across the subnets with observed movement activity (subnets with no StakeMoved events are absent): a per-subnet leaderboard (StakeMoved event count, distinct movers, and average movements per mover) ranked by total movements, a network rollup with the true distinct mover count (an account moving stake out of several subnets counts once) and total movements, and a distribution summary (count, mean, min, p25, median, p75, p90, max) of the per-subnet re-move intensity. `limit` caps the leaderboard (default 20, max 100). The re-delegation-churn companion to the net-capital-flow GET /api/v1/chain/stake-flow — move_stake relocates stake between hotkeys/subnets without unstaking, so it is churn, not flow. Computed live from the account_events StakeMoved stream; schema-stable empty block when cold. Pass ?format=csv to download the per-subnet leaderboard as CSV (the network rollup + intensity distribution stay JSON-only). */
+        get: operations["chainStakeMoves"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chain/transfer-pairs": {
         parameters: {
             query?: never;
@@ -1840,6 +1857,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subnets/{netuid}/prometheus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch Prometheus-endpoint serving activity for one subnet over a 7d or 30d window: the distinct exporters (hotkeys), the PrometheusServed event count, and the average announcements per exporter, computed live from the account_events PrometheusServed stream. The per-subnet drill-in of GET /api/v1/chain/prometheus (which ranks only the top-N subnets and cannot be queried by netuid) and the telemetry-endpoint sibling of GET /api/v1/subnets/{netuid}/serving (axon endpoints). Schema-stable zeroed card when the subnet has no PrometheusServed events in the window. */
+        get: operations["subnetPrometheus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subnets/{netuid}/registrations": {
         parameters: {
             query?: never;
@@ -1883,6 +1917,23 @@ export interface paths {
         };
         /** Fetch net stake flow for one subnet over a recent window: total TAO staked (StakeAdded) vs unstaked (StakeRemoved), the net flow, and the stake/unstake event counts, summed live from the account_events stream. ?direction=all|in|out filters to inflow (StakeAdded) or outflow (StakeRemoved) only; omitted defaults to all. Windows (7d/30d/90d) are bounded by the account_events retention. */
         get: operations["subnetStakeFlow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subnets/{netuid}/stake-moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch stake-movement (re-delegation) activity for one subnet over a 7d or 30d window: the distinct movers (accounts), the StakeMoved event count, and the average movements per mover, computed live from the account_events StakeMoved stream. The per-subnet drill-in of GET /api/v1/chain/stake-moves (which ranks only the top-N subnets and cannot be queried by netuid) and the re-delegation-churn sibling of GET /api/v1/subnets/{netuid}/stake-flow (net capital flow) — move_stake relocates stake between hotkeys/subnets without unstaking, so it is churn, not flow. Schema-stable zeroed card when the subnet has no StakeMoved events in the window. */
+        get: operations["subnetStakeMoves"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1985,6 +2036,23 @@ export interface paths {
         };
         /** Fetch validator weight-setting activity for one subnet over a 7d or 30d window: the distinct weight-setting validators, the WeightsSet event count, and the average updates per validator, computed live from the account_events WeightsSet stream. The per-subnet drill-in of GET /api/v1/chain/weights (which ranks only the top-N subnets and cannot be queried by netuid). Schema-stable zeroed card when the subnet has no WeightsSet events in the window. */
         get: operations["subnetWeights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subnets/{netuid}/weights/setters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch the per-subnet weight-setter leaderboard over a 7d or 30d window: the individual validators behind /weights ranked by activity, each with its WeightsSet count, its share of the subnet's total weight-setting, and when it first and last set weights in the window, computed live from the account_events WeightsSet stream. The setter-level drill-in of GET /api/v1/subnets/{netuid}/weights (which reports only the aggregate and never names the setters). Schema-stable empty leaderboard when the subnet has no WeightsSet events in the window. */
+        get: operations["subnetWeightSetters"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3178,6 +3246,38 @@ export interface components {
                 total_staked_tao: number;
                 total_unstaked_tao: number;
                 unstake_events: number;
+            }[];
+            /** @enum {string|null} */
+            window: "7d" | "30d" | null;
+        };
+        /** @description Network-wide stake-movement (re-delegation) activity over a 7d/30d window across the subnets with observed movement activity: a per-subnet leaderboard (distinct movers, StakeMoved count, movements per mover) plus a network rollup with the true distinct mover count and a distribution of per-subnet re-move intensity. The re-delegation-churn companion to the net-capital-flow /api/v1/chain/stake-flow — StakeMoved is an account relocating stake between hotkeys/subnets (move_stake) without unstaking, so it measures churn, not flow; keyed on the origin subnet and moving account. Served live from the account_events StakeMoved stream at /api/v1/chain/stake-moves (no static file); subnet_count 0 and the leaderboard empty when cold. */
+        ChainStakeMovesArtifact: {
+            /** @description Spread of the per-subnet movements-per-mover intensity across the subnets that saw a move in the window (null when no subnet saw a move). subnet_count and this distribution cover only subnets with observed StakeMoved activity, not every registered subnet. */
+            intensity_distribution: {
+                count: number;
+                max: number;
+                mean: number;
+                median: number;
+                min: number;
+                p25: number;
+                p75: number;
+                p90: number;
+            } | null;
+            /** @description Rollup over the window: the true distinct movers across all subnets (an account moving stake out of several subnets counts once, so NOT the sum of the per-subnet counts), total StakeMoved events, and the network movements-per-mover intensity (null when no stake moved). */
+            network: {
+                distinct_movers: number;
+                movements: number;
+                movements_per_mover: number | null;
+            };
+            /** Format: date-time */
+            observed_at: string | null;
+            schema_version: number;
+            subnet_count: number;
+            subnets: {
+                distinct_movers: number;
+                movements: number;
+                movements_per_mover: number | null;
+                netuid: number;
             }[];
             /** @enum {string|null} */
             window: "7d" | "30d" | null;
@@ -5999,6 +6099,18 @@ export interface components {
             /** Format: uri */
             url: string;
         } | null;
+        /** @description Per-subnet Prometheus-endpoint serving activity over a 7d/30d window: the distinct exporters (hotkeys), PrometheusServed event count, and announcements per exporter for ONE subnet. The per-subnet drill-in of /api/v1/chain/prometheus (which ranks only the top-N subnets and cannot be queried by netuid) and the telemetry-endpoint sibling of /api/v1/subnets/{netuid}/serving, served live from the account_events PrometheusServed stream at /api/v1/subnets/{netuid}/prometheus (no static file); zeroed when the subnet has no PrometheusServed events in the window. */
+        SubnetPrometheusArtifact: {
+            announcements: number;
+            announcements_per_exporter: number | null;
+            distinct_exporters: number;
+            netuid: number;
+            /** Format: date-time */
+            observed_at: string | null;
+            schema_version: number;
+            /** @enum {string|null} */
+            window: "7d" | "30d" | null;
+        };
         /** @description Per-subnet neuron-registration activity over a 7d/30d window: the distinct registrants (hotkeys), NeuronRegistered event count, and registrations per registrant for ONE subnet. Raw registration demand from the account_events NeuronRegistered stream — the companion to the neuron_daily validator-set churn in /api/v1/subnets/{netuid}/turnover (net snapshot change, not raw event volume) — served live at /api/v1/subnets/{netuid}/registrations (no static file); zeroed when the subnet has no NeuronRegistered events in the window. */
         SubnetRegistrationsArtifact: {
             distinct_registrants: number;
@@ -6051,6 +6163,18 @@ export interface components {
             unstake_events: number;
             /** @enum {string|null} */
             window: "7d" | "30d" | "90d" | null;
+        };
+        /** @description Per-subnet stake-movement (re-delegation) activity over a 7d/30d window: the distinct movers (accounts), StakeMoved event count, and movements per mover for ONE subnet. The per-subnet drill-in of /api/v1/chain/stake-moves (which ranks only the top-N subnets and cannot be queried by netuid) and the re-delegation-churn sibling of /api/v1/subnets/{netuid}/stake-flow — StakeMoved relocates stake between hotkeys/subnets (move_stake) without unstaking, so it measures churn, not flow — served live from the account_events StakeMoved stream at /api/v1/subnets/{netuid}/stake-moves (no static file); zeroed when the subnet has no StakeMoved events in the window. */
+        SubnetStakeMovesArtifact: {
+            distinct_movers: number;
+            movements: number;
+            movements_per_mover: number | null;
+            netuid: number;
+            /** Format: date-time */
+            observed_at: string | null;
+            schema_version: number;
+            /** @enum {string|null} */
+            window: "7d" | "30d" | null;
         };
         /** @enum {unknown} */
         SubnetStatus: "active" | "inactive" | "unknown";
@@ -6143,6 +6267,28 @@ export interface components {
             observed_at: string | null;
             schema_version: number;
             sets_per_setter: number | null;
+            weight_sets: number;
+            /** @enum {string|null} */
+            window: "7d" | "30d" | null;
+        };
+        /** @description Per-subnet weight-setter leaderboard over a 7d/30d window: the individual validators behind /weights ranked by activity, each with its WeightsSet count, its share of the subnet's total, and its first/last set time. The setter-level drill-in of /api/v1/subnets/{netuid}/weights, served live from the account_events WeightsSet stream at /api/v1/subnets/{netuid}/weights/setters (no static file); an empty leaderboard when the subnet has no WeightsSet events in the window. */
+        SubnetWeightSettersArtifact: {
+            distinct_setters: number;
+            netuid: number;
+            /** Format: date-time */
+            observed_at: string | null;
+            schema_version: number;
+            setter_count: number;
+            setters: {
+                /** Format: date-time */
+                first_set_at: string | null;
+                hotkey: string | null;
+                /** Format: date-time */
+                last_set_at: string | null;
+                share: number | null;
+                uid: number | null;
+                weight_sets: number;
+            }[];
             weight_sets: number;
             /** @enum {string|null} */
             window: "7d" | "30d" | null;
@@ -11262,6 +11408,147 @@ export interface operations {
             };
         };
     };
+    chainStakeMoves: {
+        parameters: {
+            query?: {
+                window?: "7d" | "30d";
+                limit?: number;
+                /** @description Response format override. Use `csv` to download the route rows as text/csv; `json` keeps the default response envelope. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical artifact wrapped in the Metagraphed API envelope, or route rows as text/csv when CSV is requested. */
+            200: {
+                headers: {
+                    "cache-control": components["headers"]["CacheControl"];
+                    etag: components["headers"]["ETag"];
+                    "x-metagraph-contract-version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "intensity_distribution": {
+                     *           "count": 2,
+                     *           "max": 15,
+                     *           "mean": 12.5,
+                     *           "median": 10,
+                     *           "min": 10,
+                     *           "p25": 10,
+                     *           "p75": 15,
+                     *           "p90": 15
+                     *         },
+                     *         "network": {
+                     *           "distinct_movers": 5,
+                     *           "movements": 70,
+                     *           "movements_per_mover": 14
+                     *         },
+                     *         "observed_at": "2026-06-01T00:00:00.000Z",
+                     *         "schema_version": 1,
+                     *         "subnet_count": 2,
+                     *         "subnets": [
+                     *           {
+                     *             "distinct_movers": 4,
+                     *             "movements": 40,
+                     *             "movements_per_mover": 10,
+                     *             "netuid": 1
+                     *           },
+                     *           {
+                     *             "distinct_movers": 2,
+                     *             "movements": 30,
+                     *             "movements_per_mover": 15,
+                     *             "netuid": 2
+                     *           }
+                     *         ],
+                     *         "window": "7d"
+                     *       },
+                     *       "meta": {
+                     *         "artifact_path": "example",
+                     *         "cache": "short",
+                     *         "contract_version": "2026-06-29.1",
+                     *         "generated_at": "2026-06-01T00:00:00.000Z",
+                     *         "pagination": {
+                     *           "collection": "example",
+                     *           "cursor": 1,
+                     *           "limit": 1,
+                     *           "next_cursor": 1,
+                     *           "order": "asc",
+                     *           "returned": 1,
+                     *           "sort": "example",
+                     *           "total": 1
+                     *         },
+                     *         "published_at": "2026-06-01T00:00:00.000Z",
+                     *         "source": "live-cron-prober",
+                     *         "stale_contract": {
+                     *           "built_under": "example",
+                     *           "live": "example"
+                     *         }
+                     *       },
+                     *       "ok": true,
+                     *       "schema_version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SuccessEnvelope"] & {
+                        data?: components["schemas"]["ChainStakeMovesArtifact"];
+                    };
+                    /**
+                     * @example netuid,distinct_movers,movements,movements_per_mover
+                     *     1,4,40,10
+                     */
+                    "text/csv": string;
+                };
+            };
+            /** @description ETag matched and the cached response is still valid. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query parameters were malformed or unsupported. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Artifact or API route was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description HTTP method is not supported. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unexpected backend error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     chainTransferPairs: {
         parameters: {
             query?: {
@@ -14078,7 +14365,7 @@ export interface operations {
                      *       "meta": {
                      *         "artifact_path": "/metagraph/fixtures/7:subnet-api:new_v2.json",
                      *         "cache": "standard",
-                     *         "contract_version": "2026-07-03.2",
+                     *         "contract_version": "2026-07-04.1",
                      *         "generated_at": "1970-01-01T00:00:00.000Z",
                      *         "published_at": null,
                      *         "source": "r2"
@@ -21787,6 +22074,115 @@ export interface operations {
             };
         };
     };
+    subnetPrometheus: {
+        parameters: {
+            query?: {
+                window?: "7d" | "30d";
+            };
+            header?: never;
+            path: {
+                netuid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical artifact wrapped in the Metagraphed API envelope. */
+            200: {
+                headers: {
+                    "cache-control": components["headers"]["CacheControl"];
+                    etag: components["headers"]["ETag"];
+                    "x-metagraph-contract-version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "announcements": 1,
+                     *         "announcements_per_exporter": 0.5,
+                     *         "distinct_exporters": 1,
+                     *         "netuid": 7,
+                     *         "observed_at": "2026-06-01T00:00:00.000Z",
+                     *         "schema_version": 1,
+                     *         "window": "7d"
+                     *       },
+                     *       "meta": {
+                     *         "artifact_path": "example",
+                     *         "cache": "short",
+                     *         "contract_version": "2026-06-29.1",
+                     *         "generated_at": "2026-06-01T00:00:00.000Z",
+                     *         "pagination": {
+                     *           "collection": "example",
+                     *           "cursor": 1,
+                     *           "limit": 1,
+                     *           "next_cursor": 1,
+                     *           "order": "asc",
+                     *           "returned": 1,
+                     *           "sort": "example",
+                     *           "total": 1
+                     *         },
+                     *         "published_at": "2026-06-01T00:00:00.000Z",
+                     *         "source": "live-cron-prober",
+                     *         "stale_contract": {
+                     *           "built_under": "example",
+                     *           "live": "example"
+                     *         }
+                     *       },
+                     *       "ok": true,
+                     *       "schema_version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SuccessEnvelope"] & {
+                        data?: components["schemas"]["SubnetPrometheusArtifact"];
+                    };
+                };
+            };
+            /** @description ETag matched and the cached response is still valid. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query parameters were malformed or unsupported. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Artifact or API route was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description HTTP method is not supported. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unexpected backend error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     subnetRegistrations: {
         parameters: {
             query?: {
@@ -22068,6 +22464,115 @@ export interface operations {
                      */
                     "application/json": components["schemas"]["SuccessEnvelope"] & {
                         data?: components["schemas"]["SubnetStakeFlowArtifact"];
+                    };
+                };
+            };
+            /** @description ETag matched and the cached response is still valid. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query parameters were malformed or unsupported. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Artifact or API route was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description HTTP method is not supported. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unexpected backend error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    subnetStakeMoves: {
+        parameters: {
+            query?: {
+                window?: "7d" | "30d";
+            };
+            header?: never;
+            path: {
+                netuid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical artifact wrapped in the Metagraphed API envelope. */
+            200: {
+                headers: {
+                    "cache-control": components["headers"]["CacheControl"];
+                    etag: components["headers"]["ETag"];
+                    "x-metagraph-contract-version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "distinct_movers": 1,
+                     *         "movements": 1,
+                     *         "movements_per_mover": 0.5,
+                     *         "netuid": 7,
+                     *         "observed_at": "2026-06-01T00:00:00.000Z",
+                     *         "schema_version": 1,
+                     *         "window": "7d"
+                     *       },
+                     *       "meta": {
+                     *         "artifact_path": "example",
+                     *         "cache": "short",
+                     *         "contract_version": "2026-06-29.1",
+                     *         "generated_at": "2026-06-01T00:00:00.000Z",
+                     *         "pagination": {
+                     *           "collection": "example",
+                     *           "cursor": 1,
+                     *           "limit": 1,
+                     *           "next_cursor": 1,
+                     *           "order": "asc",
+                     *           "returned": 1,
+                     *           "sort": "example",
+                     *           "total": 1
+                     *         },
+                     *         "published_at": "2026-06-01T00:00:00.000Z",
+                     *         "source": "live-cron-prober",
+                     *         "stale_contract": {
+                     *           "built_under": "example",
+                     *           "live": "example"
+                     *         }
+                     *       },
+                     *       "ok": true,
+                     *       "schema_version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SuccessEnvelope"] & {
+                        data?: components["schemas"]["SubnetStakeMovesArtifact"];
                     };
                 };
             };
@@ -22829,6 +23334,125 @@ export interface operations {
                      */
                     "application/json": components["schemas"]["SuccessEnvelope"] & {
                         data?: components["schemas"]["SubnetWeightsArtifact"];
+                    };
+                };
+            };
+            /** @description ETag matched and the cached response is still valid. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query parameters were malformed or unsupported. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Artifact or API route was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description HTTP method is not supported. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unexpected backend error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    subnetWeightSetters: {
+        parameters: {
+            query?: {
+                window?: "7d" | "30d";
+            };
+            header?: never;
+            path: {
+                netuid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical artifact wrapped in the Metagraphed API envelope. */
+            200: {
+                headers: {
+                    "cache-control": components["headers"]["CacheControl"];
+                    etag: components["headers"]["ETag"];
+                    "x-metagraph-contract-version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "distinct_setters": 1,
+                     *         "netuid": 7,
+                     *         "observed_at": "2026-06-01T00:00:00.000Z",
+                     *         "schema_version": 1,
+                     *         "setter_count": 1,
+                     *         "setters": [
+                     *           {
+                     *             "first_set_at": "2026-06-01T00:00:00.000Z",
+                     *             "hotkey": "example",
+                     *             "last_set_at": "2026-06-01T00:00:00.000Z",
+                     *             "share": 0.5,
+                     *             "uid": 1,
+                     *             "weight_sets": 1
+                     *           }
+                     *         ],
+                     *         "weight_sets": 1,
+                     *         "window": "7d"
+                     *       },
+                     *       "meta": {
+                     *         "artifact_path": "example",
+                     *         "cache": "short",
+                     *         "contract_version": "2026-06-29.1",
+                     *         "generated_at": "2026-06-01T00:00:00.000Z",
+                     *         "pagination": {
+                     *           "collection": "example",
+                     *           "cursor": 1,
+                     *           "limit": 1,
+                     *           "next_cursor": 1,
+                     *           "order": "asc",
+                     *           "returned": 1,
+                     *           "sort": "example",
+                     *           "total": 1
+                     *         },
+                     *         "published_at": "2026-06-01T00:00:00.000Z",
+                     *         "source": "live-cron-prober",
+                     *         "stale_contract": {
+                     *           "built_under": "example",
+                     *           "live": "example"
+                     *         }
+                     *       },
+                     *       "ok": true,
+                     *       "schema_version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SuccessEnvelope"] & {
+                        data?: components["schemas"]["SubnetWeightSettersArtifact"];
                     };
                 };
             };

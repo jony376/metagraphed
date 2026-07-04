@@ -279,12 +279,23 @@ export async function handleUptime(request, env, netuid, url) {
 // ?window=90d request both resolve to the same edge-cache entry — mirrors
 // canonicalSubnetConcentrationHistoryCachePath in entities.mjs.
 export function canonicalUptimeCachePath(url) {
-  const validationError = validateQueryParams(url, ["window"]);
+  const validationError = validateQueryParams(url, ["window", "min_samples"]);
   if (validationError) return `${url.pathname}${url.search}`;
   const windowParam = url.searchParams.get("window") || "90d";
   if (!Object.hasOwn(UPTIME_WINDOWS, windowParam))
     return `${url.pathname}${url.search}`;
-  return `${url.pathname}?window=${encodeURIComponent(windowParam)}`;
+  // min_samples is a HAVING row-filter that changes the response (handleUptime
+  // drops day rows below the threshold), so it MUST be part of the cache key.
+  // Omitting it collides ?min_samples=100 (few rows) with ?min_samples=0 (all
+  // rows) on one edge-cache entry, serving whichever was cached first for both.
+  const minSamples = parseNonNegativeIntParam(
+    url.searchParams.get("min_samples"),
+    "min_samples",
+  );
+  if (minSamples.error) return `${url.pathname}${url.search}`;
+  const params = [`window=${encodeURIComponent(windowParam)}`];
+  if (minSamples.value !== null) params.push(`min_samples=${minSamples.value}`);
+  return `${url.pathname}?${params.join("&")}`;
 }
 
 // Normalises the economics-trends URL so that a bare ?-free request and an explicit

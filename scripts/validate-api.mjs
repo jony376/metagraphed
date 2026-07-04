@@ -256,6 +256,17 @@ const checks = [
     },
   ],
   [
+    "/api/v1/subnets/7/weights/setters?window=30d",
+    (body) => {
+      assert.equal(body.data.netuid, 7);
+      assert.equal(body.data.window, "30d");
+      assert.equal(typeof body.data.distinct_setters, "number");
+      assert.equal(typeof body.data.weight_sets, "number");
+      assert.equal(typeof body.data.setter_count, "number");
+      assert.equal(Array.isArray(body.data.setters), true);
+    },
+  ],
+  [
     "/api/v1/subnets/7/serving?window=30d",
     (body) => {
       assert.equal(body.data.netuid, 7);
@@ -265,6 +276,34 @@ const checks = [
       assert.equal(
         body.data.announcements_per_server === null ||
           typeof body.data.announcements_per_server === "number",
+        true,
+      );
+    },
+  ],
+  [
+    "/api/v1/subnets/7/prometheus?window=30d",
+    (body) => {
+      assert.equal(body.data.netuid, 7);
+      assert.equal(body.data.window, "30d");
+      assert.equal(typeof body.data.distinct_exporters, "number");
+      assert.equal(typeof body.data.announcements, "number");
+      assert.equal(
+        body.data.announcements_per_exporter === null ||
+          typeof body.data.announcements_per_exporter === "number",
+        true,
+      );
+    },
+  ],
+  [
+    "/api/v1/subnets/7/stake-moves?window=30d",
+    (body) => {
+      assert.equal(body.data.netuid, 7);
+      assert.equal(body.data.window, "30d");
+      assert.equal(typeof body.data.distinct_movers, "number");
+      assert.equal(typeof body.data.movements, "number");
+      assert.equal(
+        body.data.movements_per_mover === null ||
+          typeof body.data.movements_per_mover === "number",
         true,
       );
     },
@@ -675,6 +714,20 @@ const checks = [
       assert.equal(Array.isArray(body.data.event_kinds), true);
       assert.equal(Array.isArray(body.data.recent_events), true);
       assert.equal(typeof body.data.total_events, "number");
+    },
+  ],
+  [
+    "/api/v1/chain/stake-moves",
+    (body) => {
+      assert.equal(body.data.schema_version, 1);
+      assert.equal(typeof body.data.subnet_count, "number");
+      assert.equal(typeof body.data.network, "object");
+      assert.equal(
+        body.data.intensity_distribution === null ||
+          typeof body.data.intensity_distribution === "object",
+        true,
+      );
+      assert.equal(Array.isArray(body.data.subnets), true);
     },
   ],
   [

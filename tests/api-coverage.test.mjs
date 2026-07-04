@@ -1270,6 +1270,21 @@ describe("review enrichment list CSV export", () => {
 
 // --- registry list CSV export (#2521-#2526) -----------------------------------
 describe("registry list CSV export", () => {
+  const parseCsv = async (res) => {
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get("content-type"), /^text\/csv/);
+    const text = await res.text();
+    const lines = text.split("\r\n").filter(Boolean);
+    const header = lines[0].split(",");
+    const rows = lines.slice(1).map((line) => {
+      const values = line.split(",");
+      return Object.fromEntries(
+        header.map((name, index) => [name, values[index]]),
+      );
+    });
+    return { header, rows, lines };
+  };
+
   const CSV_ROUTES = [
     "economics",
     "surfaces",
@@ -1332,6 +1347,38 @@ describe("registry list CSV export", () => {
     });
   }
 
+  test("profiles CSV export projects completeness columns and preserves descending score order (#2525)", async () => {
+    const res = await handleRequest(
+      req(
+        "/api/v1/profiles?format=csv&fields=netuid,completeness_score,curation_level,profile_level&sort=completeness_score&order=desc&limit=5",
+      ),
+      createLocalArtifactEnv(),
+      {},
+    );
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get("content-type"), /^text\/csv/);
+    assert.equal(
+      res.headers.get("content-disposition"),
+      'attachment; filename="profiles.csv"',
+    );
+
+    const { header, rows } = await parseCsv(res);
+    assert.equal(
+      header.join(","),
+      "netuid,completeness_score,curation_level,profile_level",
+    );
+    assert.ok(rows.length > 1);
+    const scores = rows.map((row) => Number(row.completeness_score));
+    assert.ok(scores.every(Number.isFinite));
+    assert.deepEqual(
+      scores,
+      [...scores].sort((a, b) => b - a),
+    );
+    assert.ok(rows.every((row) => /^\d+$/.test(row.netuid)));
+    assert.ok(rows.every((row) => row.curation_level !== ""));
+    assert.ok(rows.every((row) => row.profile_level !== ""));
+  });
+
   test("subnet-scoped surfaces export CSV for one netuid", async () => {
     const res = await handleRequest(
       req("/api/v1/subnets/0/surfaces?format=csv"),
@@ -1344,6 +1391,50 @@ describe("registry list CSV export", () => {
       res.headers.get("content-disposition"),
       'attachment; filename="subnet-surfaces.csv"',
     );
+  });
+
+  test("surfaces CSV export projects kind/provider/name and honors kind filters (#2522)", async () => {
+    const parseCsv = async (res) => {
+      assert.equal(res.status, 200);
+      assert.match(res.headers.get("content-type"), /^text\/csv/);
+      const lines = (await res.text()).split("\r\n").filter(Boolean);
+      const header = lines[0].split(",");
+      const rows = lines.slice(1).map((line) => {
+        const values = line.split(",");
+        return Object.fromEntries(
+          header.map((name, index) => [name, values[index]]),
+        );
+      });
+      return { header, rows };
+    };
+
+    const all = await handleRequest(
+      req(
+        "/api/v1/surfaces?format=csv&fields=kind,provider,name&kind=openapi&limit=5",
+      ),
+      createLocalArtifactEnv(),
+      {},
+    );
+    const allCsv = await parseCsv(all);
+    assert.equal(allCsv.header.join(","), "kind,provider,name");
+    assert.ok(allCsv.rows.length > 0);
+    assert.ok(allCsv.rows.every((row) => row.kind === "openapi"));
+    assert.ok(allCsv.rows.every((row) => row.provider !== ""));
+    assert.ok(allCsv.rows.every((row) => row.name !== ""));
+
+    const subnet = await handleRequest(
+      req(
+        "/api/v1/subnets/6/surfaces?format=csv&fields=kind,provider,name&kind=openapi",
+      ),
+      createLocalArtifactEnv(),
+      {},
+    );
+    const subnetCsv = await parseCsv(subnet);
+    assert.equal(subnetCsv.header.join(","), "kind,provider,name");
+    assert.ok(subnetCsv.rows.length > 0);
+    assert.ok(subnetCsv.rows.every((row) => row.kind === "openapi"));
+    assert.ok(subnetCsv.rows.every((row) => row.provider !== ""));
+    assert.ok(subnetCsv.rows.every((row) => row.name !== ""));
   });
 
   test("endpoints CSV export filters, projects, and streams the large route path (#2523)", async () => {
