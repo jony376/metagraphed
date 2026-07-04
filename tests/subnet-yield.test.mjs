@@ -184,6 +184,30 @@ describe("buildSubnetYield", () => {
     assert.equal(d.block_number, null);
   });
 
+  test("blank uid and block_number cells stay null (not uid/block 0)", () => {
+    // Mirrors the blank-cell guard in metagraph-neurons.mjs (#3020).
+    for (const blank of ["", "   "]) {
+      const skipped = buildSubnetYield(
+        [{ ...neuron(1, { stake: 1, emission: 1 }), uid: blank }],
+        7,
+      );
+      assert.equal(
+        skipped.neuron_count,
+        0,
+        `neuron_count for uid ${JSON.stringify(blank)}`,
+      );
+      const block = buildSubnetYield(
+        [neuron(1, { stake: 1, emission: 1, block: blank })],
+        7,
+      );
+      assert.equal(
+        block.block_number,
+        null,
+        `block_number for ${JSON.stringify(blank)}`,
+      );
+    }
+  });
+
   test("coerces string-typed captured_at cells to ISO timestamps", () => {
     const d = buildSubnetYield(
       [

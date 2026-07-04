@@ -39,6 +39,8 @@ function raoBigToTao(rao) {
 // so guard null explicitly rather than coercing it to uid 0).
 function normalizedUid(value) {
   if (value == null) return null;
+  // Blank D1 cells coerce via Number("") → 0; trim rejects "" / whitespace-only.
+  if (typeof value === "string" && value.trim() === "") return null;
   const uid = Number(value);
   return Number.isSafeInteger(uid) && uid >= 0 ? uid : null;
 }
@@ -108,8 +110,15 @@ export function buildSubnetYield(rows, netuid) {
       // block is absent (the contract models it as ["integer","null"]). A
       // numeric string like "8454388" from D1 must still pass.
       const rawBlock = row?.block_number;
-      const block = rawBlock == null ? NaN : Number(rawBlock);
-      blockNumber = Number.isFinite(block) ? block : null;
+      if (
+        rawBlock == null ||
+        (typeof rawBlock === "string" && rawBlock.trim() === "")
+      ) {
+        blockNumber = null;
+      } else {
+        const block = Number(rawBlock);
+        blockNumber = Number.isFinite(block) ? block : null;
+      }
     }
     const stake = toNumber(row?.stake_tao);
     const emission = toNumber(row?.emission_tao);
