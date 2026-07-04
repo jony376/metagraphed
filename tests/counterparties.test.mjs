@@ -508,7 +508,7 @@ describe("buildCounterpartyRelationship", () => {
           coldkey: "A",
           netuid: 1,
           amount_tao: 1,
-          observed_at: "",
+          observed_at: null,
         },
         {
           block_number: 2,
@@ -517,10 +517,19 @@ describe("buildCounterpartyRelationship", () => {
           coldkey: "A",
           netuid: 1,
           amount_tao: 1,
-          observed_at: "   ",
+          observed_at: "",
         },
         {
           block_number: 3,
+          event_index: 0,
+          hotkey: ME,
+          coldkey: "A",
+          netuid: 1,
+          amount_tao: 1,
+          observed_at: "   ",
+        },
+        {
+          block_number: 4,
           event_index: 0,
           hotkey: ME,
           coldkey: "A",
@@ -533,12 +542,13 @@ describe("buildCounterpartyRelationship", () => {
       "A",
       {},
     );
-    assert.equal(data.transfer_count, 3);
+    assert.equal(data.transfer_count, 4);
     assert.equal(data.first_seen_at, null);
     assert.equal(data.last_seen_at, null);
     assert.equal(data.transfers[0].observed_at, null);
     assert.equal(data.transfers[1].observed_at, null);
     assert.equal(data.transfers[2].observed_at, null);
+    assert.equal(data.transfers[3].observed_at, null);
   });
 
   test("coerces string-typed observed_at cells on relationship last_seen_at", () => {

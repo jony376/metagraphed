@@ -75,7 +75,9 @@ function nullableInteger(value) {
 }
 
 function nullableTimestamp(value) {
-  if (value == null || value === "") return null;
+  if (value == null) return null;
+  // Blank D1 cells coerce via Number("") → 0; trim rejects "" / whitespace-only.
+  if (typeof value === "string" && value.trim() === "") return null;
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n) || n <= 0) return null;
   const date = new Date(n);
