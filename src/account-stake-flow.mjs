@@ -51,6 +51,16 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// A finite TAO aggregate cell, or null when absent/blank/non-numeric. Blank D1 cells
+// coerce via Number("") → 0; skip those rows rather than counting phantom zero-TAO
+// stake events (mirrors buildCounterparties #3059).
+function nullableTao(value) {
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 // A non-negative integer netuid, or null for a malformed/absent cell. Guard null
 // explicitly so a null netuid is skipped rather than coerced to subnet 0 (Number(null) === 0).
 function normalizedNetuid(value) {
@@ -114,13 +124,14 @@ export function buildAccountStakeFlow(rows, address, { window } = {}) {
     if (netuid == null) continue;
     const kind = row?.event_kind;
     if (kind !== STAKE_ADDED_KIND && kind !== STAKE_REMOVED_KIND) continue;
+    const tao = nullableTao(row?.total_tao);
+    if (tao == null) continue;
     const bucket = perSubnet.get(netuid) ?? {
       staked: 0,
       unstaked: 0,
       stakeEvents: 0,
       unstakeEvents: 0,
     };
-    const tao = toNumber(row?.total_tao);
     // Counts are integer (the schema requires it); truncate defensively so a non-D1
     // caller passing a float cannot emit a fractional event count.
     const count = Math.max(0, Math.trunc(toNumber(row?.event_count)));

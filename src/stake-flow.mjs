@@ -45,6 +45,14 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// A finite TAO aggregate cell, or null when absent/blank/non-numeric.
+function nullableTao(value) {
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 // Convert an epoch-ms timestamp to an ISO string, or null when not finite. The
 // REST meta.generated_at is string|null per the envelope contract, so the newest
 // event's epoch-ms observed_at is rendered the same way account-events does (toIso).
@@ -75,11 +83,13 @@ export function buildStakeFlow(rows, netuid, { window } = {}) {
   // not just the single-row-per-kind shape GROUP BY event_kind guarantees.
   for (const row of list) {
     const kind = row?.event_kind;
+    const tao = nullableTao(row?.total_tao);
+    if (tao == null) continue;
     if (kind === STAKE_ADDED_KIND) {
-      stakedTao += toNumber(row?.total_tao);
+      stakedTao += tao;
       stakeEvents += toNumber(row?.event_count);
     } else if (kind === STAKE_REMOVED_KIND) {
-      unstakedTao += toNumber(row?.total_tao);
+      unstakedTao += tao;
       unstakeEvents += toNumber(row?.event_count);
     }
   }

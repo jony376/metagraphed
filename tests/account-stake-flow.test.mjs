@@ -211,14 +211,57 @@ describe("buildAccountStakeFlow", () => {
     assert.equal(d.net_flow_tao, -0.1);
   });
 
-  test("coerces a non-numeric tao / count cell to 0", () => {
+  test("skips blank total_tao rows instead of counting phantom stake events", () => {
+    // Mirrors buildCounterparties #3059: blank total_tao must not inflate event_count.
+    for (const blank of ["", "   "]) {
+      const d = buildAccountStakeFlow(
+        [
+          {
+            netuid: 1,
+            event_kind: STAKE_ADDED_KIND,
+            total_tao: blank,
+            event_count: 5,
+          },
+          added(1, 25, 2),
+        ],
+        ADDR,
+      );
+      assert.equal(
+        d.stake_events,
+        2,
+        `stake_events for total_tao ${JSON.stringify(blank)}`,
+      );
+      assert.equal(d.total_staked_tao, 25);
+      assert.equal(d.subnet_count, 1);
+    }
+    const zero = buildAccountStakeFlow([added(1, 0, 3)], ADDR);
+    assert.equal(zero.total_staked_tao, 0);
+    assert.equal(zero.stake_events, 3);
+  });
+
+  test("skips null/blank/non-numeric total_tao rows instead of coercing to zero flow", () => {
     const d = buildAccountStakeFlow(
-      [{ netuid: 1, event_kind: STAKE_ADDED_KIND, total_tao: "n/a" }],
+      [
+        {
+          netuid: 1,
+          event_kind: STAKE_ADDED_KIND,
+          total_tao: null,
+          event_count: 2,
+        },
+        {
+          netuid: 1,
+          event_kind: STAKE_REMOVED_KIND,
+          total_tao: "nope",
+          event_count: 3,
+        },
+      ],
       ADDR,
     );
     assert.equal(d.total_staked_tao, 0);
-    assert.equal(d.stake_events, 0); // undefined event_count -> 0
-    assert.equal(d.subnet_count, 1);
+    assert.equal(d.total_unstaked_tao, 0);
+    assert.equal(d.stake_events, 0);
+    assert.equal(d.unstake_events, 0);
+    assert.equal(d.subnet_count, 0);
   });
 });
 

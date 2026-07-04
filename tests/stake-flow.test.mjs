@@ -92,15 +92,40 @@ describe("buildStakeFlow", () => {
     assert.equal(data.net_flow_tao, 0.3);
   });
 
-  test("null / non-finite total_tao defaults to zero", () => {
+  test("skips blank total_tao rows instead of counting phantom stake events", () => {
+    for (const blank of ["", "   "]) {
+      const data = buildStakeFlow(
+        [
+          {
+            event_kind: STAKE_ADDED_KIND,
+            total_tao: blank,
+            event_count: 4,
+          },
+          { event_kind: STAKE_ADDED_KIND, total_tao: 10, event_count: 1 },
+        ],
+        1,
+        {},
+      );
+      assert.equal(
+        data.stake_events,
+        1,
+        `stake_events for total_tao ${JSON.stringify(blank)}`,
+      );
+      assert.equal(data.total_staked_tao, 10);
+    }
+  });
+
+  test("skips null/blank/non-numeric total_tao rows instead of coercing to zero flow", () => {
     const rows = [
-      { event_kind: STAKE_ADDED_KIND, total_tao: null, event_count: 0 },
-      { event_kind: STAKE_REMOVED_KIND, total_tao: "nope", event_count: 0 },
+      { event_kind: STAKE_ADDED_KIND, total_tao: null, event_count: 2 },
+      { event_kind: STAKE_REMOVED_KIND, total_tao: "nope", event_count: 3 },
     ];
     const data = buildStakeFlow(rows, 1, {});
     assert.equal(data.total_staked_tao, 0);
     assert.equal(data.total_unstaked_tao, 0);
     assert.equal(data.net_flow_tao, 0);
+    assert.equal(data.stake_events, 0);
+    assert.equal(data.unstake_events, 0);
   });
 });
 

@@ -185,9 +185,30 @@ describe("buildChainStakeFlow", () => {
     );
   });
 
-  test("coerces non-numeric cells, zero-flow subnets, and invalid timestamps", () => {
-    // total_tao/event_count non-numeric -> 0; a subnet whose only flow is 0 has gross 0 and
-    // reads balanced; an invalid last_observed leaves observed_at null.
+  test("skips blank total_tao rows instead of counting phantom stake events", () => {
+    for (const blank of ["", "   "]) {
+      const data = buildChainStakeFlow(
+        [
+          {
+            netuid: 1,
+            event_kind: "StakeAdded",
+            total_tao: blank,
+            event_count: 9,
+          },
+          ev(1, "StakeAdded", 100, 2),
+        ],
+        {},
+      );
+      assert.equal(
+        data.network.stake_events,
+        2,
+        `stake events for total_tao ${JSON.stringify(blank)}`,
+      );
+      assert.equal(data.subnets[0].total_staked_tao, 100);
+    }
+  });
+
+  test("skips null/blank/non-numeric total_tao rows instead of materializing zero-flow subnets", () => {
     const data = buildChainStakeFlow(
       [
         {
@@ -200,11 +221,8 @@ describe("buildChainStakeFlow", () => {
       ],
       {},
     );
-    assert.equal(data.subnet_count, 1);
-    assert.equal(data.subnets[0].total_staked_tao, 0);
-    assert.equal(data.subnets[0].gross_flow_tao, 0);
-    assert.equal(data.subnets[0].direction, "balanced");
-    assert.equal(data.subnets[0].stake_events, 0);
+    assert.equal(data.subnet_count, 0);
+    assert.deepEqual(data.subnets, []);
     assert.equal(data.observed_at, null);
   });
 

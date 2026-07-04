@@ -40,6 +40,14 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// A finite TAO aggregate cell, or null when absent/blank/non-numeric.
+function nullableTao(value) {
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 // A non-negative integer netuid, or null for a malformed/absent cell. Guard null AND a
 // blank/whitespace-only string explicitly so neither is silently coerced to subnet 0
 // (Number(null), Number(""), and Number("  ") all === 0); a malformed direct row must be
@@ -126,6 +134,8 @@ export function buildChainStakeFlow(
     // the pure builder aligned with the "active stake-flow subnets" contract.
     const kind = row?.event_kind;
     if (kind !== STAKE_ADDED_KIND && kind !== STAKE_REMOVED_KIND) continue;
+    const tao = nullableTao(row?.total_tao);
+    if (tao == null) continue;
     const bucket = perNetuid.get(netuid) ?? {
       staked: 0,
       unstaked: 0,
@@ -133,10 +143,10 @@ export function buildChainStakeFlow(
       unstakeEvents: 0,
     };
     if (kind === STAKE_ADDED_KIND) {
-      bucket.staked += toNumber(row?.total_tao);
+      bucket.staked += tao;
       bucket.stakeEvents += toNumber(row?.event_count);
     } else {
-      bucket.unstaked += toNumber(row?.total_tao);
+      bucket.unstaked += tao;
       bucket.unstakeEvents += toNumber(row?.event_count);
     }
     perNetuid.set(netuid, bucket);
