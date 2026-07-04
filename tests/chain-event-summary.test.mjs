@@ -7,7 +7,7 @@ import {
   CHAIN_EVENT_SUMMARY_WINDOWS,
 } from "../src/chain-event-summary.mjs";
 import { handleRequest } from "../workers/api.mjs";
-import { handleChainEventSummary } from "../workers/request-handlers/analytics.mjs";
+import { handleChainEventSummary, canonicalChainEventSummaryCacheRoute } from "../workers/request-handlers/analytics.mjs";
 import { createLocalArtifactEnv } from "../scripts/lib.mjs";
 
 const OBS = 1_750_000_000_000;
@@ -311,6 +311,35 @@ describe("buildChainEventSummary", () => {
     assert.equal(out.event_kinds[0].first_observed_at, null);
     assert.equal(out.event_kinds[0].last_observed_at, null);
   });
+
+  test("preserves category block bounds when a later kind row omits them", () => {
+    const out = buildChainEventSummary(
+      [
+        kindRow("StakeAdded", 2, { first_block: 100, last_block: 200 }),
+        kindRow("StakeRemoved", 1, { first_block: null, last_block: null }),
+      ],
+      [],
+      { subnetCount: 1 },
+    );
+    assert.equal(out.categories[0].first_block, 100);
+    assert.equal(out.categories[0].last_block, 200);
+  });
+
+  test("retains positive nullable TAO amounts without zeroing", () => {
+    const out = buildChainEventSummary(
+      [kindRow("Transfer", 1, { amount_tao: 1.5, alpha_amount: "0.25" })],
+      [],
+      { subnetCount: 1 },
+    );
+    assert.equal(out.event_kinds[0].amount_tao, 1.5);
+    assert.equal(out.event_kinds[0].alpha_amount, 0.25);
+  });
+
+  test("drops malformed recent evidence rows", () => {
+    const out = buildChainEventSummary([], [null, "bad"], { subnetCount: 0 });
+    assert.deepEqual(out.recent_events, []);
+    assert.equal(out.recent_event_count, 0);
+  });
 });
 
 describe("loadChainEventSummary", () => {
@@ -561,6 +590,45 @@ describe("handleChainEventSummary", () => {
     );
     assert.equal(res.status, 200);
     assert.equal(await res.text(), "");
+  });
+
+  test("rejects an unsupported window with 400", async () => {
+    const res = await handleChainEventSummary(
+      new Request("https://api.metagraph.sh/api/v1/chain/event-summary?window=1y"),
+      eventSummaryEnv({
+        probeRow: [{ subnet_count: 0, newest_observed: null }],
+        kindRows: [],
+        recentRows: [],
+      }),
+      new URL("https://api.metagraph.sh/api/v1/chain/event-summary?window=1y"),
+      {},
+    );
+    assert.equal(res.status, 400);
+  });
+});
+
+describe("canonicalChainEventSummaryCacheRoute", () => {
+  test("normalizes default window and optional limit for cache keys", () => {
+    assert.equal(
+      canonicalChainEventSummaryCacheRoute(
+        new URL("https://api.metagraph.sh/api/v1/chain/event-summary"),
+      ),
+      "/api/v1/chain/event-summary?window=30d",
+    );
+    assert.equal(
+      canonicalChainEventSummaryCacheRoute(
+        new URL(
+          "https://api.metagraph.sh/api/v1/chain/event-summary?window=7d&limit=5",
+        ),
+      ),
+      "/api/v1/chain/event-summary?window=7d&limit=5",
+    );
+    assert.equal(
+      canonicalChainEventSummaryCacheRoute(
+        new URL("https://api.metagraph.sh/api/v1/chain/event-summary?window=90d"),
+      ),
+      "/api/v1/chain/event-summary?window=90d",
+    );
   });
 });
 

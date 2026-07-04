@@ -1496,7 +1496,7 @@ export async function handleChainRegistrations(request, env, url, ctx = {}) {
     : response;
 }
 
-function canonicalChainEventSummaryCacheRoute(url) {
+export function canonicalChainEventSummaryCacheRoute(url) {
   const search = new URL("https://cache-key.invalid/").searchParams;
   const windowValue = url.searchParams.get("window");
   search.set("window", windowValue ?? DEFAULT_CHAIN_EVENT_SUMMARY_WINDOW);

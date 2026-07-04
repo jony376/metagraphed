@@ -205,6 +205,10 @@ describe("isR2OnlyArtifactPath", () => {
       isR2OnlyArtifactPath("/metagraph/subnets/7/metagraph.json"),
       true,
     );
+    assert.equal(
+      isR2OnlyArtifactPath("/metagraph/chain/event-summary.json"),
+      true,
+    );
     assert.equal(isR2OnlyArtifactPath("subnets.json"), true);
   });
 
