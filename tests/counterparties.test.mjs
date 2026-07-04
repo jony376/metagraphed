@@ -346,6 +346,64 @@ describe("buildCounterpartyRelationship", () => {
     }
   });
 
+  test("blank amount_tao cells stay null on relationship transfers (not 0 TAO)", () => {
+    // Mirrors the blank-cell guard in account-events.mjs (#3031): Number("") is 0.
+    for (const blank of ["", "   "]) {
+      const data = buildCounterpartyRelationship(
+        [
+          {
+            block_number: 5,
+            event_index: 0,
+            hotkey: ME,
+            coldkey: "A",
+            netuid: 1,
+            amount_tao: blank,
+            observed_at: Date.UTC(2026, 5, 1),
+          },
+          {
+            block_number: 6,
+            event_index: 0,
+            hotkey: ME,
+            coldkey: "A",
+            netuid: 1,
+            amount_tao: 2,
+            observed_at: Date.UTC(2026, 5, 2),
+          },
+        ],
+        ME,
+        "A",
+        {},
+      );
+      assert.equal(
+        data.transfer_count,
+        1,
+        `transfer_count for amount ${JSON.stringify(blank)}`,
+      );
+      assert.equal(data.total_sent_tao, 2);
+      assert.equal(data.transfers.length, 1);
+      assert.equal(data.transfers[0].amount_tao, 2);
+    }
+    // A literal zero amount is still valid — only blank strings are rejected.
+    const zero = buildCounterpartyRelationship(
+      [
+        {
+          block_number: 7,
+          event_index: 0,
+          hotkey: ME,
+          coldkey: "A",
+          netuid: 1,
+          amount_tao: 0,
+          observed_at: Date.UTC(2026, 5, 3),
+        },
+      ],
+      ME,
+      "A",
+      {},
+    );
+    assert.equal(zero.transfer_count, 1);
+    assert.equal(zero.transfers[0].amount_tao, 0);
+  });
+
   test("skips sparse pair rows while preserving valid string and null evidence cells", () => {
     const data = buildCounterpartyRelationship(
       [
