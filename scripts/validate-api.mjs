@@ -653,6 +653,17 @@ const checks = [
     },
   ],
   [
+    "/api/v1/chain/event-summary",
+    (body) => {
+      assert.equal(body.data.schema_version, 1);
+      assert.equal(typeof body.data.subnet_count, "number");
+      assert.equal(Array.isArray(body.data.categories), true);
+      assert.equal(Array.isArray(body.data.event_kinds), true);
+      assert.equal(Array.isArray(body.data.recent_events), true);
+      assert.equal(typeof body.data.total_events, "number");
+    },
+  ],
+  [
     "/api/v1/chain/performance",
     (body) => {
       assert.equal(body.data.schema_version, 1);

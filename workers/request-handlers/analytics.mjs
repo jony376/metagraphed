@@ -76,6 +76,13 @@ import {
   CHAIN_REGISTRATIONS_LIMIT_MAX,
 } from "../../src/chain-registrations.mjs";
 import {
+  loadChainEventSummary,
+  CHAIN_EVENT_SUMMARY_WINDOWS,
+  DEFAULT_CHAIN_EVENT_SUMMARY_WINDOW,
+  CHAIN_EVENT_SUMMARY_RECENT_LIMIT_DEFAULT,
+  CHAIN_EVENT_SUMMARY_RECENT_LIMIT_MAX,
+} from "../../src/chain-event-summary.mjs";
+import {
   loadChainWeights,
   CHAIN_WEIGHTS_LIMIT_DEFAULT,
   CHAIN_WEIGHTS_LIMIT_MAX,
@@ -1375,6 +1382,72 @@ export async function handleChainRegistrations(request, env, url, ctx = {}) {
       );
     },
     canonicalAnalyticsCacheRoute(url, ["limit"]),
+  );
+  return request.method === "HEAD"
+    ? new Response(null, { status: response.status, headers: response.headers })
+    : response;
+}
+
+function canonicalChainEventSummaryCacheRoute(url) {
+  const search = new URL("https://cache-key.invalid/").searchParams;
+  const windowValue = url.searchParams.get("window");
+  search.set("window", windowValue ?? DEFAULT_CHAIN_EVENT_SUMMARY_WINDOW);
+  const limitValue = url.searchParams.get("limit");
+  if (limitValue !== null) search.set("limit", limitValue);
+  const query = search.toString();
+  return `${url.pathname}${query ? `?${query}` : ""}`;
+}
+
+// GET /api/v1/chain/event-summary: network-wide windowed account_events summary
+// across every subnet — compact kind/category counts plus a small newest-first
+// evidence slice. Companion to /subnets/{netuid}/event-summary.
+export async function handleChainEventSummary(request, env, url, ctx = {}) {
+  const validationError = validateQueryParams(url, ["window", "limit"]);
+  if (validationError) return analyticsQueryError(validationError);
+  const windowLabel =
+    url.searchParams.get("window") ?? DEFAULT_CHAIN_EVENT_SUMMARY_WINDOW;
+  if (
+    !Object.prototype.hasOwnProperty.call(CHAIN_EVENT_SUMMARY_WINDOWS, windowLabel)
+  ) {
+    return analyticsQueryError({
+      parameter: "window",
+      message: `window must be one of ${Object.keys(CHAIN_EVENT_SUMMARY_WINDOWS).join(", ")}.`,
+    });
+  }
+  const { limit, error: limitError } = parseLimitParam(url, {
+    defaultLimit: CHAIN_EVENT_SUMMARY_RECENT_LIMIT_DEFAULT,
+    maxLimit: CHAIN_EVENT_SUMMARY_RECENT_LIMIT_MAX,
+  });
+  if (limitError) return analyticsQueryError(limitError);
+
+  const cacheRequest =
+    request.method === "HEAD"
+      ? new Request(request, { method: "GET" })
+      : request;
+  const response = await withEdgeCache(
+    cacheRequest,
+    ctx,
+    env,
+    "chain-event-summary",
+    async () => {
+      const data = await loadChainEventSummary(d1Runner(env), {
+        windowLabel,
+        limit,
+      });
+      return envelopeResponse(
+        cacheRequest,
+        {
+          data,
+          meta: await analyticsMeta(
+            env,
+            "/metagraph/chain/event-summary.json",
+            data.observed_at,
+          ),
+        },
+        "short",
+      );
+    },
+    canonicalChainEventSummaryCacheRoute(url),
   );
   return request.method === "HEAD"
     ? new Response(null, { status: response.status, headers: response.headers })

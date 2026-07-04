@@ -1218,6 +1218,12 @@ export const PUBLIC_ARTIFACTS = [
     "ChainRegistrationsArtifact",
   ),
   artifact(
+    "chain-event-summary",
+    "/metagraph/chain/event-summary.json",
+    "Network-wide windowed account_events summary across every subnet: counts by event kind and coarse category, distinct hotkey/coldkey counts, per-kind subnet reach, TAO/alpha sums where applicable, first/last evidence bounds, and a small newest-first evidence slice, served live from D1 at /api/v1/chain/event-summary (no static file). Companion to the per-subnet /subnets/{netuid}/event-summary route.",
+    "ChainEventSummaryArtifact",
+  ),
+  artifact(
     "chain-fees",
     "/metagraph/chain/fees.json",
     "Fee/tip market analytics (daily totals, averages, exact medians, and a top-fee-payer list) over a 7d or 30d window for the block explorer (#1988), computed live from the first-party extrinsics D1 tier at /api/v1/chain/fees (no static file).",
@@ -2688,6 +2694,23 @@ export const API_ROUTES = [
     [
       { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
       { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
+    ],
+    [],
+  ),
+  route(
+    "chain-event-summary",
+    "GET",
+    "/api/v1/chain/event-summary",
+    "/metagraph/chain/event-summary.json",
+    "Fetch a network-wide windowed account_events summary across every subnet: counts by event kind and coarse category, distinct hotkey/coldkey counts, per-kind subnet reach, TAO/alpha sums where applicable, first/last evidence bounds, plus a newest-first evidence slice. ?window=7d|30d|90d (default 30d); ?limit caps recent_events (default 10, max 50). Computed live from the account_events D1 tier; schema-stable empty block when cold. Companion to GET /api/v1/subnets/{netuid}/event-summary.",
+    "short",
+    ["chain", "analytics"],
+    [
+      {
+        name: "window",
+        schema: { type: "string", enum: ["7d", "30d", "90d"] },
+      },
+      { name: "limit", schema: { type: "integer", minimum: 1, maximum: 50 } },
     ],
     [],
   ),

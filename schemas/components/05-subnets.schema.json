@@ -2162,6 +2162,102 @@
           }
         }
       },
+      "ChainEventKindSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One event-kind aggregate in a network-wide windowed account_events summary.",
+        "required": [
+          "event_kind",
+          "category",
+          "event_count",
+          "subnet_count",
+          "hotkey_count",
+          "coldkey_count",
+          "amount_tao",
+          "alpha_amount",
+          "first_block",
+          "last_block",
+          "first_observed_at",
+          "last_observed_at"
+        ],
+        "properties": {
+          "event_kind": { "type": "string" },
+          "category": {
+            "type": "string",
+            "enum": [
+              "registration",
+              "stake",
+              "serving",
+              "consensus",
+              "delegation",
+              "identity",
+              "governance",
+              "transfer",
+              "other"
+            ]
+          },
+          "event_count": { "type": "integer", "minimum": 0 },
+          "subnet_count": { "type": "integer", "minimum": 0 },
+          "hotkey_count": { "type": "integer", "minimum": 0 },
+          "coldkey_count": { "type": "integer", "minimum": 0 },
+          "amount_tao": { "type": "number", "minimum": 0 },
+          "alpha_amount": { "type": "number", "minimum": 0 },
+          "first_block": { "type": ["integer", "null"], "minimum": 0 },
+          "last_block": { "type": ["integer", "null"], "minimum": 0 },
+          "first_observed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "last_observed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "ChainEventSummaryArtifact": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Network-wide windowed account_events summary across every subnet: counts by event kind and coarse category, distinct hotkey/coldkey counts, per-kind subnet reach, TAO/alpha sums where applicable, first/last evidence bounds, and a small newest-first evidence slice. Served live at /api/v1/chain/event-summary (no static file). Companion to the per-subnet /subnets/{netuid}/event-summary route.",
+        "required": [
+          "schema_version",
+          "window",
+          "observed_at",
+          "subnet_count",
+          "total_events",
+          "kind_count",
+          "category_count",
+          "recent_event_count",
+          "limit",
+          "categories",
+          "event_kinds",
+          "recent_events"
+        ],
+        "properties": {
+          "schema_version": { "type": "integer" },
+          "window": { "type": "string", "enum": ["7d", "30d", "90d"] },
+          "observed_at": { "type": ["string", "null"], "format": "date-time" },
+          "subnet_count": { "type": "integer", "minimum": 0 },
+          "total_events": { "type": "integer", "minimum": 0 },
+          "kind_count": { "type": "integer", "minimum": 0 },
+          "category_count": { "type": "integer", "minimum": 0 },
+          "recent_event_count": { "type": "integer", "minimum": 0 },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 50 },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubnetEventCategorySummary"
+            }
+          },
+          "event_kinds": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChainEventKindSummary" }
+          },
+          "recent_events": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AccountEvent" }
+          }
+        }
+      },
       "AccountExtrinsicsArtifact": {
         "type": "object",
         "additionalProperties": true,
