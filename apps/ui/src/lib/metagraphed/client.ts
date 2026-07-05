@@ -27,7 +27,7 @@ export type QueryParams = Record<string, QueryValue | QueryValue[]>;
 // (mainnet has prefix "" → no-op). So /api/v1/subnets becomes
 // /api/v1/testnet/subnets when Testnet is selected — same origin, different
 // data partition, matching the backend's /{network}/ routing.
-function applyNetworkPrefix(p: string): string {
+export function applyNetworkPrefix(p: string): string {
   const prefix = getNetworkPrefix();
   if (!prefix) return p;
   for (const root of ["/api/v1", "/metagraph"]) {
@@ -39,7 +39,7 @@ function applyNetworkPrefix(p: string): string {
   return p;
 }
 
-function buildUrl(path: string, params?: QueryParams): string {
+export function buildUrl(path: string, params?: QueryParams): string {
   const base = getApiBase().replace(/\/$/, "");
   const p = applyNetworkPrefix(path.startsWith("/") ? path : `/${path}`);
   const url = new URL(base + p);
