@@ -196,6 +196,20 @@ describe("buildConcentration", () => {
     assert.equal(data.emission.total, 1);
   });
 
+  test("reject negative, non-numeric, and missing stake_tao cells", () => {
+    const data = buildConcentration(
+      [
+        { stake_tao: 10, coldkey: "ck-a" },
+        { stake_tao: -1, coldkey: "ck-b" },
+        { stake_tao: "abc", coldkey: "ck-c" },
+        { coldkey: "ck-d" },
+      ],
+      7,
+    );
+    assert.equal(data.neuron_count, 1);
+    assert.equal(data.entity_count, 1);
+  });
+
   test("converts D1 epoch-millisecond captured_at values to ISO strings", () => {
     const data = buildConcentration(
       [
