@@ -262,6 +262,7 @@ function RecentIncidents() {
         b.downtime_ms - a.downtime_ms,
     );
     return list;
+    // isOngoing omitted: closes over ledger.observed_at in the same render; ledger already triggers recompute (#3461).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ledger]);
   const summary = ledger?.summary;

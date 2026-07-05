@@ -319,6 +319,7 @@ function SchemaExplorer() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // setSearch omitted: TanStack Router setter is stable; only search.open should rebind Escape (#3461).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.open]);
 

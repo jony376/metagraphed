@@ -86,6 +86,7 @@ export function useRegisterApiSource(paths: string[], artifacts: string[] = []) 
       ...artifacts.map((p) => ({ path: p, artifact: p })),
     ];
     return register(items);
+    // paths/artifacts omitted: pathsKey/artifactsKey serialise them so fresh array literals do not re-register every render (#3461).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathsKey, artifactsKey, register]);
 }
