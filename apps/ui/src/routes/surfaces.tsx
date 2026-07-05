@@ -32,7 +32,12 @@ import {
 } from "@/components/metagraphed/table-controls";
 import { ListShell, LoadMore } from "@/components/metagraphed/list-shell";
 import { surfacesInfiniteQuery, providersQuery, subnetsQuery } from "@/lib/metagraphed/queries";
-import { matchesQuery, sortBy, tableSearchSchema, TABLE_FILTER_NAV_OPTS } from "@/lib/metagraphed/url-state";
+import {
+  matchesQuery,
+  sortBy,
+  tableSearchSchema,
+  TABLE_FILTER_NAV_OPTS,
+} from "@/lib/metagraphed/url-state";
 import type { Surface, Provider, Subnet } from "@/lib/metagraphed/types";
 
 export const Route = createFileRoute("/surfaces")({

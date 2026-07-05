@@ -40,7 +40,13 @@ import {
   agentCatalogMapQuery,
 } from "@/lib/metagraphed/queries";
 import { classNames, formatNumber } from "@/lib/metagraphed/format";
-import { joinHealth, matchesQuery, sortBy, tableSearchSchema, TABLE_FILTER_NAV_OPTS } from "@/lib/metagraphed/url-state";
+import {
+  joinHealth,
+  matchesQuery,
+  sortBy,
+  tableSearchSchema,
+  TABLE_FILTER_NAV_OPTS,
+} from "@/lib/metagraphed/url-state";
 import { API_BASE } from "@/lib/metagraphed/config";
 import type { AgentCatalogSummary, Subnet } from "@/lib/metagraphed/types";
 
