@@ -4,21 +4,12 @@ import { subnetHealthIncidentsQuery, flattenSurfaceIncidents } from "@/lib/metag
 import { Skeleton, EmptyState } from "@/components/metagraphed/states";
 import { TimeAgo } from "@/components/metagraphed/time-ago";
 import { SectionAnchor } from "@/components/metagraphed/section-anchor";
-import { classNames } from "@/lib/metagraphed/format";
+import { classNames, durationLabel } from "@/lib/metagraphed/format";
 
 function severityIcon(sev?: string) {
   if (sev === "high") return <AlertOctagon className="size-3.5 text-health-down" />;
   if (sev === "medium") return <AlertTriangle className="size-3.5 text-health-warn" />;
   return <Info className="size-3.5 text-ink-muted" />;
-}
-
-function fmtDuration(ms?: number) {
-  if (ms == null || !Number.isFinite(ms) || ms <= 0) return null;
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
-  return `${(seconds / 86400).toFixed(1)}d`;
 }
 
 /** Trim the "sn-<netuid>-" / "community-sn-<netuid>-" prefix from a surface id. */
@@ -47,12 +38,10 @@ export function IncidentTimeline({ netuid }: { netuid: number }) {
       ) : (
         <ol className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
           {incidents.slice(0, 12).map((inc, i) => {
-            const duration = fmtDuration(
-              inc.duration_ms ??
-                (inc.ended_at && inc.started_at
-                  ? new Date(inc.ended_at).getTime() - new Date(inc.started_at).getTime()
-                  : undefined),
-            );
+            const label = inc.started_at
+              ? durationLabel(inc.started_at, inc.ended_at ?? undefined)
+              : null;
+            const duration = label && label !== "—" ? label : null;
             const open = !inc.ended_at;
             return (
               <li
