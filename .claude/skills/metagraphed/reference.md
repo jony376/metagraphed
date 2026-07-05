@@ -287,6 +287,44 @@ local paths, env dumps, or private notes.
   post-merge `sync-client-version` workflow, which auto-opens a `chore/sync-client-version` PR whenever
   a contract file lands on main. `validate:client-sdk-sync` now emits a notice (not a failure) when the
   version isn't bumped in a contributor PR.
+- **`packages/client` is an npm workspace (#3066), with no lockfile of its own.** `apps/ui` consumes it
+  as a live workspace link (`"@jsonbored/metagraphed": "*"` in `apps/ui/package.json`, resolved from
+  `packages/client` directly) instead of round-tripping through the published npm package. Verified
+  this does NOT silently fall back to a registry-fetched copy even when installing from directly
+  inside `apps/ui` (`cd apps/ui && npm install`, no `--workspace` flag) — npm still walks up to the
+  root `package.json`'s `workspaces` field and links `node_modules/@jsonbored/metagraphed` as a real
+  symlink to `packages/client`, matching a root-scoped `npm ci --workspace=apps/ui` install exactly
+  (confirmed by identical package counts and a real symlink check). Editing
+  `packages/client/src/*` and rebuilding (`npm run build --workspace=packages/client`) is immediately
+  visible to `apps/ui`, no publish needed. `packages/client`'s own `typescript` devDependency must stay
+  aligned with the root/`apps/ui` range (`^5.9.3`): `tsup` (its build tool) is hoisted to the _root_
+  `node_modules` and resolves `typescript` from there regardless of which workspace invokes it, so a
+  workspace-local TypeScript version pin silently gets ignored by `tsup --dts` — don't reintroduce one.
+  `packages/client`'s `dist/` is gitignored and must be built explicitly before anything consuming it
+  — deliberately NOT a `package.json` "prepare" script (that would auto-run on every `npm install`/`ci`
+  repo-wide; a security scan flagged this as unnecessary install-time code execution). The `ui` CI job's
+  "Build packages/client" step covers GitHub Actions; **any Cloudflare Workers Builds "Build command"
+  for `apps/ui` must ALSO explicitly build `packages/client` first** (Cloudflare's automatic dependency
+  install is scoped to `--workspace=apps/ui` only — confirmed by matching package counts against a real
+  build log — so it never touches `packages/client` on its own). Cloudflare's Build command executes
+  as one shell chain with cwd = Root Directory (`apps/ui`) throughout, including every step after the
+  first `&&` — `npm run build --workspace=packages/client` fails there with `npm error No workspaces
+found` (confirmed against a real build log) because `--workspace=` only resolves when npm is invoked
+  from the true repo root, not from inside another workspace's own directory; use a relative `cd`
+  instead: `(cd ../../packages/client && npm run build)`.
+- **`vite` must stay an explicit ROOT-level devDependency**, even though the backend never imports it.
+  Cloudflare Workers Builds' automatic dependency-install step runs scoped to `--workspace=apps/ui`
+  only (never a full monorepo install — confirmed by matching package counts against a real Cloudflare
+  build log, ~470 vs. a full install's ~560), which never touches root's own devDependencies. Without
+  `vite` declared at root, nothing gives npm a reason to hoist `apps/ui`'s own `vite` up to the bare
+  root `node_modules` during that scoped install, so anything ALSO hoisted to root with only a _peer_
+  (not direct) range on vite — e.g. `@lovable.dev/vite-tanstack-config`, which `vite.config.ts` needs —
+  can't find it (`Error: Cannot find module 'vite'`, real Workers Builds failure, #3183). A worktree
+  nested under the main checkout can mask this locally: Node's resolution silently falls back to a
+  stray `node_modules/vite` in an ancestor directory outside the repo, so a real reproduction needs a
+  genuinely isolated clone (no parent `node_modules` anywhere in its ancestry) plus the exact
+  `npm ci --workspace=apps/ui` command Cloudflare runs — a plain full `npm ci`/`install` won't surface
+  this class of bug at all.
 - **MCP server card is worker-computed — no committed artifact.** Adding or changing tools in
   `src/mcp-server.mjs` does NOT require regenerating `public/.well-known/mcp/server-card.json` (that
   file no longer exists in git). The card is served dynamically by `mcpServerCardResponse` in
@@ -316,12 +354,11 @@ local paths, env dumps, or private notes.
 - **`pipeline:check`** is only trustworthy in isolation after a clean `npm run build`.
 - **`validate.yml`'s `actions/setup-node` steps set `cache-dependency-path: package-lock.json`
   explicitly.** Without it, `setup-node`'s cache key hashes every `package-lock.json` in the tree
-  (root + `packages/client` + `deploy/wss-lb`), so a routine SDK version bump in
-  `packages/client/package-lock.json` (the `sync-client-version` workflow does this every few
-  days) would invalidate the CI npm cache even though `npm ci` in `validate.yml` only ever reads
-  the root lockfile (no npm `workspaces` config ties them together). If you ever add a new
-  `actions/setup-node` step to a workflow in this repo, set this explicitly rather than relying on
-  the default.
+  (root + `deploy/wss-lb`), so a change to the latter would invalidate the CI npm cache even though
+  `npm ci` in `validate.yml` only ever reads the root lockfile. `packages/client` is an npm workspace
+  with no lockfile of its own — its version bumps land in the root lockfile, already covered by this
+  path. If you ever add a new `actions/setup-node` step to a workflow in this repo, set this
+  explicitly rather than relying on the default.
 - The Worker router is `workers/api.mjs`; serving/overlay/health live in `src/*.mjs`; the contract in
   `schemas/` + `src/contracts.mjs`.
 
