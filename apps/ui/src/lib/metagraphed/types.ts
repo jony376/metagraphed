@@ -1104,6 +1104,53 @@ export interface SubnetValidators {
   validators: MetagraphNeuron[];
 }
 
+/** Supported sort keys for GET /api/v1/validators. */
+export type GlobalValidatorSort =
+  | "avg_validator_trust"
+  | "max_validator_trust"
+  | "stake_dominance"
+  | "subnet_count"
+  | "total_emission"
+  | "total_stake"
+  | "uid_count";
+
+/** One current subnet membership in the network-wide validator leaderboard. */
+export interface GlobalValidatorSubnet {
+  netuid: number;
+  uid: number;
+  stake_tao: number;
+  emission_tao: number;
+  validator_trust: number | null;
+}
+
+/** One validator/operator row grouped by hotkey across subnet memberships. */
+export interface GlobalValidator {
+  hotkey: string;
+  coldkey: string | null;
+  coldkey_count: number;
+  subnet_count: number;
+  uid_count: number;
+  total_stake_tao: number;
+  total_emission_tao: number;
+  avg_validator_trust: number | null;
+  max_validator_trust: number | null;
+  stake_dominance: number | null;
+  latest_captured_at: string | null;
+  latest_block_number: number | null;
+  subnets: GlobalValidatorSubnet[];
+}
+
+/** Network-wide validator leaderboard from GET /api/v1/validators. */
+export interface GlobalValidators {
+  schema_version?: number;
+  sort: GlobalValidatorSort;
+  limit: number;
+  validator_count: number;
+  captured_at?: string;
+  block_number?: number;
+  validators: GlobalValidator[];
+}
+
 /** A single neuron snapshot from /api/v1/subnets/{netuid}/neurons/{uid}. */
 export interface SubnetNeuronSnapshot {
   netuid: number;

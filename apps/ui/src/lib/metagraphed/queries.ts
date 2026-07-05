@@ -94,6 +94,10 @@ import type {
   MetagraphNeuron,
   SubnetMetagraph,
   SubnetValidators,
+  GlobalValidator,
+  GlobalValidators,
+  GlobalValidatorSort,
+  GlobalValidatorSubnet,
   SubnetNeuronSnapshot,
   ConcentrationMetrics,
   SubnetConcentration,
@@ -2789,6 +2793,83 @@ function normalizeSubnetValidators(netuid: number, raw: unknown): SubnetValidato
   };
 }
 
+const GLOBAL_VALIDATOR_SORTS: GlobalValidatorSort[] = [
+  "avg_validator_trust",
+  "max_validator_trust",
+  "stake_dominance",
+  "subnet_count",
+  "total_emission",
+  "total_stake",
+  "uid_count",
+];
+
+function normalizeGlobalValidatorSubnet(raw: unknown): GlobalValidatorSubnet | null {
+  if (!isPlainRecord(raw)) return null;
+  const netuid = coerceFiniteNumber(raw.netuid);
+  const uid = coerceFiniteNumber(raw.uid);
+  if (netuid == null || uid == null) return null;
+  return {
+    netuid,
+    uid,
+    stake_tao: coerceFiniteNumber(raw.stake_tao) ?? 0,
+    emission_tao: coerceFiniteNumber(raw.emission_tao) ?? 0,
+    validator_trust:
+      raw.validator_trust == null ? null : (coerceFiniteNumber(raw.validator_trust) ?? null),
+  };
+}
+
+function normalizeGlobalValidator(raw: unknown): GlobalValidator | null {
+  if (!isPlainRecord(raw)) return null;
+  const hotkey = coerceString(raw.hotkey);
+  if (!hotkey) return null;
+  const subnets = Array.isArray(raw.subnets)
+    ? raw.subnets.flatMap((subnet) => {
+        const normalized = normalizeGlobalValidatorSubnet(subnet);
+        return normalized ? [normalized] : [];
+      })
+    : [];
+  const nullableNum = (value: unknown): number | null =>
+    value == null ? null : (coerceFiniteNumber(value) ?? null);
+  return {
+    hotkey,
+    coldkey: typeof raw.coldkey === "string" ? raw.coldkey : null,
+    coldkey_count: coerceFiniteNumber(raw.coldkey_count) ?? 0,
+    subnet_count: coerceFiniteNumber(raw.subnet_count) ?? 0,
+    uid_count: coerceFiniteNumber(raw.uid_count) ?? 0,
+    total_stake_tao: coerceFiniteNumber(raw.total_stake_tao) ?? 0,
+    total_emission_tao: coerceFiniteNumber(raw.total_emission_tao) ?? 0,
+    avg_validator_trust: nullableNum(raw.avg_validator_trust),
+    max_validator_trust: nullableNum(raw.max_validator_trust),
+    stake_dominance: nullableNum(raw.stake_dominance),
+    latest_captured_at: typeof raw.latest_captured_at === "string" ? raw.latest_captured_at : null,
+    latest_block_number: nullableNum(raw.latest_block_number),
+    subnets,
+  };
+}
+
+export function normalizeGlobalValidators(raw: unknown): GlobalValidators {
+  const d = isPlainRecord(raw) ? raw : {};
+  const sortRaw = coerceString(d.sort);
+  const sort = GLOBAL_VALIDATOR_SORTS.includes(sortRaw as GlobalValidatorSort)
+    ? (sortRaw as GlobalValidatorSort)
+    : "subnet_count";
+  const validators = Array.isArray(d.validators)
+    ? d.validators.flatMap((validator) => {
+        const normalized = normalizeGlobalValidator(validator);
+        return normalized ? [normalized] : [];
+      })
+    : [];
+  return {
+    schema_version: coerceFiniteNumber(d.schema_version),
+    sort,
+    limit: coerceFiniteNumber(d.limit) ?? validators.length,
+    validator_count: coerceFiniteNumber(d.validator_count) ?? validators.length,
+    captured_at: coerceString(d.captured_at),
+    block_number: coerceFiniteNumber(d.block_number),
+    validators,
+  };
+}
+
 function normalizeNeuronSnapshot(netuid: number, uid: number, raw: unknown): SubnetNeuronSnapshot {
   const d = isPlainRecord(raw) ? raw : {};
   return {
@@ -2904,6 +2985,27 @@ export const subnetValidatorsQuery = (netuid: number) =>
         meta: res.meta,
         url: res.url,
       } as ApiResult<SubnetValidators>;
+    },
+    staleTime: STALE_SHORT,
+  });
+
+/** Network-wide validator/operator leaderboard grouped by hotkey. */
+export const validatorsQuery = ({
+  sort = "subnet_count",
+  limit = 20,
+}: { sort?: GlobalValidatorSort; limit?: number } = {}) =>
+  queryOptions({
+    queryKey: k("global-validators", sort, limit),
+    queryFn: async ({ signal }) => {
+      const res = await apiFetch<Partial<GlobalValidators>>("/api/v1/validators", {
+        params: { sort, limit },
+        signal,
+      });
+      return {
+        data: normalizeGlobalValidators(res.data),
+        meta: res.meta,
+        url: res.url,
+      } as ApiResult<GlobalValidators>;
     },
     staleTime: STALE_SHORT,
   });
