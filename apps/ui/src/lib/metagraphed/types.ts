@@ -1406,6 +1406,32 @@ export interface ChainFees {
   top_fee_payers: ChainFeePayer[];
 }
 
+/** One directed sender→receiver corridor from GET /api/v1/chain/transfer-pairs. */
+export interface ChainTransferPair {
+  from: string;
+  to: string;
+  volume_tao: number;
+  transfer_count: number;
+  last_block: number | null;
+  last_observed_at: string | null;
+}
+
+export type ChainTransferPairSort = "volume" | "count";
+
+/** Network-wide transfer-pair leaderboard from GET /api/v1/chain/transfer-pairs. */
+export interface ChainTransferPairs {
+  schema_version: number;
+  window: string | null;
+  sort: ChainTransferPairSort;
+  observed_at: string | null;
+  total_volume_tao: number;
+  transfer_count: number;
+  unique_pairs: number;
+  pair_count: number;
+  top_pair_share: number | null;
+  pairs: ChainTransferPair[];
+}
+
 /** Network-wide stake/emission concentration from GET /api/v1/chain/concentration. */
 export interface ChainConcentration {
   schema_version: number;

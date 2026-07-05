@@ -46,6 +46,9 @@ import type {
   ChainFees,
   ChainFeeDay,
   ChainFeePayer,
+  ChainTransferPair,
+  ChainTransferPairs,
+  ChainTransferPairSort,
   ChainConcentration,
   ChainPerformance,
   ChainSigners,
@@ -156,6 +159,7 @@ const MAX_CHAIN_CALLS = 12;
 const MAX_CHAIN_SIGNERS = 20;
 const MAX_CHAIN_FEE_DAYS = 31;
 const MAX_CHAIN_FEE_PAYERS = 12;
+const MAX_CHAIN_TRANSFER_PAIRS = 100;
 
 function coerceFiniteNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -2269,6 +2273,52 @@ function normalizeChainFeePayer(raw: unknown): ChainFeePayer | null {
   };
 }
 
+export function normalizeChainTransferPair(raw: unknown): ChainTransferPair | null {
+  if (!isRecord(raw)) return null;
+  const from = firstString(raw.from);
+  const to = firstString(raw.to);
+  const volumeTao = coerceFiniteNumber(raw.volume_tao);
+  const transferCount = coerceFiniteNumber(raw.transfer_count);
+  if (
+    !from ||
+    !to ||
+    !isValidSs58(from) ||
+    !isValidSs58(to) ||
+    from === to ||
+    volumeTao == null ||
+    transferCount == null
+  ) {
+    return null;
+  }
+  return {
+    from: from.trim(),
+    to: to.trim(),
+    volume_tao: volumeTao,
+    transfer_count: transferCount,
+    last_block: coerceFiniteNumber(raw.last_block) ?? null,
+    last_observed_at: firstString(raw.last_observed_at) ?? null,
+  };
+}
+
+export function normalizeChainTransferPairs(raw: unknown): ChainTransferPairs {
+  const d = isRecord(raw) ? raw : {};
+  const sortRaw = firstString(d.sort);
+  const sort: ChainTransferPairSort = sortRaw === "count" ? "count" : "volume";
+  const pairs = normalizeChainRows(d.pairs, MAX_CHAIN_TRANSFER_PAIRS, normalizeChainTransferPair);
+  return {
+    schema_version: coerceFiniteNumber(d.schema_version) ?? 1,
+    window: firstString(d.window) ?? null,
+    sort,
+    observed_at: firstString(d.observed_at) ?? null,
+    total_volume_tao: coerceFiniteNumber(d.total_volume_tao) ?? 0,
+    transfer_count: coerceFiniteNumber(d.transfer_count) ?? 0,
+    unique_pairs: coerceFiniteNumber(d.unique_pairs) ?? 0,
+    pair_count: coerceFiniteNumber(d.pair_count) ?? pairs.length,
+    top_pair_share: coerceFiniteNumber(d.top_pair_share) ?? null,
+    pairs,
+  };
+}
+
 function normalizeChainRows<T>(
   raw: unknown,
   max: number,
@@ -2380,6 +2430,32 @@ export const chainFeesQuery = (window: ChainWindow = "7d") =>
         meta: res.meta,
         url: res.url,
       } as ApiResult<ChainFees>;
+    },
+    staleTime: STALE_SHORT,
+  });
+
+/** Directed sender→receiver transfer corridors (flow/sankey data source). */
+export const chainTransferPairsQuery = ({
+  window = "7d",
+  limit = 25,
+  sort = "volume",
+}: {
+  window?: ChainWindow;
+  limit?: number;
+  sort?: ChainTransferPairSort;
+} = {}) =>
+  queryOptions({
+    queryKey: k("chain-transfer-pairs", window, sort, limit),
+    queryFn: async ({ signal }) => {
+      const res = await apiFetch<Partial<ChainTransferPairs>>("/api/v1/chain/transfer-pairs", {
+        params: { window, limit, sort },
+        signal,
+      });
+      return {
+        data: normalizeChainTransferPairs(res.data),
+        meta: res.meta,
+        url: res.url,
+      } as ApiResult<ChainTransferPairs>;
     },
     staleTime: STALE_SHORT,
   });
