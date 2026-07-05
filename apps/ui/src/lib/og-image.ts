@@ -32,7 +32,7 @@ type EdgeCache = {
 const cacheStorage = (globalThis as { caches?: { default?: EdgeCache } }).caches?.default ?? null;
 
 // Escape text for safe embedding in the HTML string satori parses.
-function escapeText(value: string): string {
+export function escapeText(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -40,7 +40,7 @@ function escapeText(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function normalizeTitle(value: string | null): string {
+export function normalizeTitle(value: string | null): string {
   const trimmed = (value || DEFAULT_TITLE).trim() || DEFAULT_TITLE;
   return trimmed.length > MAX_TITLE_LENGTH ? `${trimmed.slice(0, MAX_TITLE_LENGTH - 1)}…` : trimmed;
 }
