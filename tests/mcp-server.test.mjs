@@ -7338,6 +7338,8 @@ describe("MCP economics + metagraph data tools", () => {
     accountEvents = [],
     weightsNetworkRows = [],
     weightsSubnetRows = [],
+    chainWeightSettersLeaderRows = [],
+    chainWeightSettersTotalsRows = [],
     stakeMovesNetworkRows = [],
     stakeMovesSubnetRows = [],
     stakeTransfersNetworkRows = [],
@@ -7384,7 +7386,12 @@ describe("MCP economics + metagraph data tools", () => {
                   // everything else uses the flat account_events fixture.
                   if (sql.includes("newest_observed")) {
                     if (sql.includes("weight_sets")) {
-                      return Promise.resolve({ results: weightsNetworkRows });
+                      return Promise.resolve({
+                        results:
+                          chainWeightSettersTotalsRows.length > 0
+                            ? chainWeightSettersTotalsRows
+                            : weightsNetworkRows,
+                      });
                     }
                     if (sql.includes("distinct_movers")) {
                       return Promise.resolve({
@@ -7419,6 +7426,11 @@ describe("MCP economics + metagraph data tools", () => {
                     return Promise.resolve({ results: weightsNetworkRows });
                   }
                   if (sql.includes("weight_sets")) {
+                    if (sql.includes("first_set")) {
+                      return Promise.resolve({
+                        results: chainWeightSettersLeaderRows,
+                      });
+                    }
                     return Promise.resolve({ results: weightsSubnetRows });
                   }
                   if (sql.includes("AS movements")) {
@@ -8547,6 +8559,140 @@ describe("MCP economics + metagraph data tools", () => {
       chainWeightsEnv(weightsNetwork(30, 8), [
         weightsRow(1, 20, 5),
         weightsRow(2, 10, 4),
+      ]),
+    );
+    const validate = new Ajv2020().compile(schema);
+    assert.ok(validate(res.body.result.structuredContent));
+  });
+
+  function weightSettersTotals(weight_sets, distinct_setters) {
+    return {
+      weight_sets,
+      distinct_setters,
+      newest_observed: 1_750_600_000_000,
+    };
+  }
+
+  function weightSettersLeaderRow(
+    hotkey,
+    uid,
+    weight_sets,
+    first_set,
+    last_set,
+  ) {
+    return { hotkey, uid, weight_sets, first_set, last_set };
+  }
+
+  function chainWeightSettersEnv(totals, leaders) {
+    return {
+      env: {
+        METAGRAPH_HEALTH_DB: metagraphD1({
+          chainWeightSettersTotalsRows: totals ? [totals] : [],
+          chainWeightSettersLeaderRows: leaders,
+        }),
+      },
+    };
+  }
+
+  test("get_chain_weight_setters returns schema-stable zeros on cold D1", async () => {
+    const res = await callTool("get_chain_weight_setters", {});
+    const out = res.body.result.structuredContent;
+    assert.equal(res.body.result.isError, false);
+    assert.equal(out.window, "7d");
+    assert.equal(out.setter_count, 0);
+    assert.deepEqual(out.setters, []);
+    assert.equal(out.weight_sets, 0);
+    assert.equal(out.distinct_setters, 0);
+    assert.equal(out.observed_at, null);
+  });
+
+  test("get_chain_weight_setters ranks setters with network totals", async () => {
+    const res = await callTool(
+      "get_chain_weight_setters",
+      { window: "30d", limit: 10 },
+      chainWeightSettersEnv(weightSettersTotals(40, 2), [
+        weightSettersLeaderRow(
+          "5Grw...alice",
+          3,
+          30,
+          1_750_000_000_000,
+          1_750_600_000_000,
+        ),
+        weightSettersLeaderRow(
+          null,
+          8,
+          10,
+          1_750_100_000_000,
+          1_750_200_000_000,
+        ),
+      ]),
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.window, "30d");
+    assert.equal(out.setter_count, 2);
+    assert.equal(out.weight_sets, 40);
+    assert.equal(out.distinct_setters, 2);
+    assert.equal(out.setters[0].weight_sets, 30);
+    assert.equal(out.setters[0].share, 0.75);
+    assert.equal(out.setters[1].weight_sets, 10);
+    assert.equal(out.setters[1].share, 0.25);
+    assert.equal(
+      out.observed_at,
+      new Date(1_750_600_000_000).toISOString(),
+    );
+  });
+
+  test("get_chain_weight_setters rejects an unsupported window", async () => {
+    const res = await callTool(
+      "get_chain_weight_setters",
+      { window: "90d" },
+      {},
+    );
+    assert.equal(res.body.result.isError, true);
+    assert.match(res.body.result.content[0].text, /window/);
+  });
+
+  test("get_chain_weight_setters caps the leaderboard by limit", async () => {
+    const res = await callTool(
+      "get_chain_weight_setters",
+      { limit: 1 },
+      chainWeightSettersEnv(weightSettersTotals(40, 2), [
+        weightSettersLeaderRow(
+          "5Grw...alice",
+          3,
+          30,
+          1_750_000_000_000,
+          1_750_600_000_000,
+        ),
+        weightSettersLeaderRow(
+          null,
+          8,
+          10,
+          1_750_100_000_000,
+          1_750_200_000_000,
+        ),
+      ]),
+    );
+    const out = res.body.result.structuredContent;
+    assert.equal(out.distinct_setters, 2);
+    assert.equal(out.setters.length, 1);
+  });
+
+  test("get_chain_weight_setters payload validates against its declared outputSchema", async () => {
+    const schema = listToolDefinitions().find(
+      (t) => t.name === "get_chain_weight_setters",
+    )?.outputSchema;
+    const res = await callTool(
+      "get_chain_weight_setters",
+      {},
+      chainWeightSettersEnv(weightSettersTotals(40, 2), [
+        weightSettersLeaderRow(
+          "5Grw...alice",
+          3,
+          30,
+          1_750_000_000_000,
+          1_750_600_000_000,
+        ),
       ]),
     );
     const validate = new Ajv2020().compile(schema);
