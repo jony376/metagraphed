@@ -5,6 +5,7 @@ import { z } from "zod";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/metagraphed/app-shell";
+import { useRefetchInterval } from "@/hooks/use-refetch-interval";
 import { TimeAgo } from "@/components/metagraphed/time-ago";
 import { ApiSourceFooter } from "@/components/metagraphed/api-source-footer";
 import { EmptyState, Skeleton } from "@/components/metagraphed/states";
@@ -118,7 +119,11 @@ function ExtrinsicsTable() {
   // Only send filters the user actually set, so an empty bar is the plain feed.
   const queryParams = extrinsicsQueryParams(search);
 
-  const rows = (useSuspenseQuery(extrinsicsQuery(queryParams)).data.data ?? []) as Extrinsic[];
+  // Extrinsics turn over as fast as blocks — poll the first page only, so
+  // paging through older extrinsics (offset > 0) isn't yanked or reflowed mid-read.
+  const refetchInterval = useRefetchInterval(15_000, search.offset === 0);
+  const rows = (useSuspenseQuery({ ...extrinsicsQuery(queryParams), refetchInterval }).data.data ??
+    []) as Extrinsic[];
 
   // Offset pagination: the API returns newest-first pages with no total. A full
   // page (rows === limit) implies more may exist; a short page is the tail.
