@@ -120,6 +120,11 @@ export {
   LoadMore,
 } from "@/components/metagraphed/list-shell";
 export { PageHero } from "@/components/metagraphed/page-hero";
+export {
+  type EntityHeroProps,
+  type EntityHeroStat,
+  EntityHero,
+} from "@/components/metagraphed/entity-hero";
 export { PageSection } from "@/components/metagraphed/page-section";
 export { ScrollReveal } from "@/components/metagraphed/scroll-reveal";
 export {
@@ -157,10 +162,6 @@ export {
   type PrimaryLinksRailProps,
   PrimaryLinksRail,
 } from "@/components/metagraphed/primary-links-rail";
-export {
-  type ProfileHeroProps,
-  ProfileHero,
-} from "@/components/metagraphed/profile-hero";
 export { MethodologyCallout } from "@/components/metagraphed/methodology-callout";
 export {
   type BarMiniDatum,

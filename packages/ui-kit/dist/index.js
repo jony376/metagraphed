@@ -2120,6 +2120,124 @@ function PageHero({
     }
   );
 }
+function EntityHero({
+  eyebrow,
+  live,
+  icon,
+  title,
+  subtitle,
+  description,
+  chips,
+  links,
+  actions,
+  banner,
+  aside,
+  stats,
+  caption,
+  size = "compact",
+  className
+}) {
+  const visibleStats = (stats ?? []).filter(
+    (s) => s.value !== void 0 && s.value !== null && s.value !== ""
+  );
+  const display = size === "display";
+  return /* @__PURE__ */ jsxs(
+    "header",
+    {
+      className: classNames(
+        "mg-hero-slab relative",
+        display ? "mb-12 md:mb-16 pt-12 md:pt-20 pb-10 md:pb-14" : "pt-8 md:pt-12 pb-8 md:pb-10 mb-6",
+        className
+      ),
+      children: [
+        caption ? /* @__PURE__ */ jsx("div", { className: "absolute right-0 top-4 hidden md:block", children: /* @__PURE__ */ jsx("span", { className: "mg-hero-caption", children: caption }) }) : null,
+        banner ? /* @__PURE__ */ jsx("div", { className: "mb-5", children: banner }) : null,
+        /* @__PURE__ */ jsxs(
+          "div",
+          {
+            className: classNames(
+              "grid md:grid-cols-[minmax(0,1fr)_auto]",
+              display ? "gap-10 md:items-end" : "gap-6 md:items-start"
+            ),
+            children: [
+              /* @__PURE__ */ jsxs("div", { className: "flex items-start gap-4 min-w-0 max-w-3xl", children: [
+                icon ? /* @__PURE__ */ jsx("div", { className: "shrink-0 mt-1", children: icon }) : null,
+                /* @__PURE__ */ jsxs("div", { className: "min-w-0", children: [
+                  eyebrow ? /* @__PURE__ */ jsxs(
+                    "div",
+                    {
+                      className: classNames(
+                        "mg-fade-in font-mono text-[10px] uppercase text-ink-muted inline-flex items-center gap-2",
+                        display ? "tracking-[0.22em]" : "tracking-[0.2em] mb-2"
+                      ),
+                      children: [
+                        live ? /* @__PURE__ */ jsx("span", { className: "mg-live-dot" }) : null,
+                        eyebrow
+                      ]
+                    }
+                  ) : null,
+                  /* @__PURE__ */ jsxs("div", { className: "flex flex-wrap items-baseline gap-x-4 gap-y-1", children: [
+                    /* @__PURE__ */ jsx(
+                      "h1",
+                      {
+                        className: classNames(
+                          "mg-fade-in mg-fade-in-delay-1 font-display font-semibold text-ink-strong",
+                          display ? "mt-4 text-[2.5rem] sm:text-5xl md:text-[3.75rem] leading-[1.02] tracking-[-0.025em]" : "text-3xl md:text-4xl tracking-[-0.01em]"
+                        ),
+                        children: title
+                      }
+                    ),
+                    !display && subtitle ? /* @__PURE__ */ jsx("span", { className: "font-mono text-xs md:text-sm text-ink-muted", children: subtitle }) : null
+                  ] }),
+                  description ? /* @__PURE__ */ jsx(
+                    "p",
+                    {
+                      className: classNames(
+                        "mg-fade-in mg-fade-in-delay-2 text-ink-muted leading-relaxed",
+                        display ? "mt-5 max-w-xl text-base md:text-lg" : "mt-3 max-w-3xl text-sm md:text-base"
+                      ),
+                      children: description
+                    }
+                  ) : null,
+                  links ? /* @__PURE__ */ jsx("div", { className: "mt-6", children: links }) : null,
+                  actions ? /* @__PURE__ */ jsx("div", { className: "mg-fade-in mg-fade-in-delay-3 mt-6 flex flex-wrap items-center gap-2", children: actions }) : null
+                ] })
+              ] }),
+              chips ? /* @__PURE__ */ jsx("div", { className: "flex flex-wrap items-center gap-1.5 md:justify-end shrink-0 max-w-md", children: chips }) : null,
+              aside ? /* @__PURE__ */ jsx("div", { className: "mg-fade-in mg-fade-in-delay-2 hidden md:block shrink-0", children: aside }) : null
+            ]
+          }
+        ),
+        visibleStats.length > 0 ? /* @__PURE__ */ jsx(
+          "div",
+          {
+            className: classNames(
+              "mg-fade-in mg-fade-in-delay-3 mg-kpi-strip",
+              display ? "mt-12 md:mt-16" : "mt-8 md:mt-10"
+            ),
+            children: visibleStats.map((s) => /* @__PURE__ */ jsxs("div", { children: [
+              /* @__PURE__ */ jsx("div", { className: "font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted", children: s.label }),
+              /* @__PURE__ */ jsxs("div", { className: "mt-1.5 flex items-baseline gap-2", children: [
+                /* @__PURE__ */ jsx(
+                  "span",
+                  {
+                    className: classNames(
+                      "font-display font-semibold tabular-nums text-ink-strong leading-none",
+                      display ? "text-2xl md:text-[1.75rem] tracking-[-0.01em]" : "text-xl md:text-2xl"
+                    ),
+                    children: s.value
+                  }
+                ),
+                s.hint ? /* @__PURE__ */ jsx("span", { className: "font-mono text-[11px] text-ink-muted", children: s.hint }) : null
+              ] }),
+              s.chart ? /* @__PURE__ */ jsx("div", { className: "mt-2.5 -ml-0.5", children: s.chart }) : null
+            ] }, s.label))
+          }
+        ) : null
+      ]
+    }
+  );
+}
 function PageSection({
   eyebrow,
   title,
@@ -2818,44 +2936,6 @@ function PrimaryLinksRail({
       it.label + href
     );
   }) });
-}
-function ProfileHero({
-  eyebrow,
-  title,
-  subtitle,
-  description,
-  chips,
-  links,
-  stats,
-  banner,
-  icon
-}) {
-  const visibleStats = (stats ?? []).filter(
-    (s) => s.value !== void 0 && s.value !== null && s.value !== ""
-  );
-  return /* @__PURE__ */ jsxs("header", { className: "mg-hero-slab relative pt-8 md:pt-12 pb-8 md:pb-10 mb-6", children: [
-    banner ? /* @__PURE__ */ jsx("div", { className: "mb-5", children: banner }) : null,
-    /* @__PURE__ */ jsxs("div", { className: "grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-start", children: [
-      /* @__PURE__ */ jsxs("div", { className: "flex items-start gap-4 min-w-0", children: [
-        icon ? /* @__PURE__ */ jsx("div", { className: "shrink-0 mt-1", children: icon }) : null,
-        /* @__PURE__ */ jsxs("div", { className: "min-w-0", children: [
-          eyebrow ? /* @__PURE__ */ jsx("div", { className: "font-mono text-[10px] uppercase tracking-[0.2em] text-ink-muted mb-2", children: eyebrow }) : null,
-          /* @__PURE__ */ jsxs("div", { className: "flex flex-wrap items-baseline gap-x-4 gap-y-1", children: [
-            /* @__PURE__ */ jsx("h1", { className: "font-display text-3xl md:text-4xl font-semibold tracking-[-0.01em] text-ink-strong", children: title }),
-            subtitle ? /* @__PURE__ */ jsx("span", { className: "font-mono text-xs md:text-sm text-ink-muted", children: subtitle }) : null
-          ] }),
-          description ? /* @__PURE__ */ jsx("p", { className: "mt-3 text-sm md:text-base text-ink-muted max-w-3xl leading-relaxed", children: description }) : null
-        ] })
-      ] }),
-      chips ? /* @__PURE__ */ jsx("div", { className: "flex flex-wrap items-center gap-1.5 md:justify-end shrink-0 max-w-md", children: chips }) : null
-    ] }),
-    links ? /* @__PURE__ */ jsx("div", { className: "mt-6", children: links }) : null,
-    visibleStats.length > 0 ? /* @__PURE__ */ jsx("div", { className: "mg-kpi-strip mt-8 md:mt-10", children: visibleStats.map((s) => /* @__PURE__ */ jsxs("div", { children: [
-      /* @__PURE__ */ jsx("div", { className: "font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted", children: s.label }),
-      /* @__PURE__ */ jsx("div", { className: "mt-1.5 font-display text-xl md:text-2xl font-semibold text-ink-strong tabular-nums leading-none", children: s.value }),
-      s.hint ? /* @__PURE__ */ jsx("div", { className: "mt-1 text-[10px] text-ink-muted", children: s.hint }) : null
-    ] }, s.label)) }) : null
-  ] });
 }
 function MethodologyCallout({
   generatedAt,
@@ -3720,4 +3800,4 @@ function TreemapMini({
   );
 }
 
-export { AccentBand, Accordion, AccordionContent, AccordionItem, AccordionTrigger, AnimatedNumber, BackToTop, BarMini, BrandIcon, CandidateChip, Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut, CopyButton, CopyIconToggle, CopyableCode, CurationChip, DailyRollupFreshness, DensityToggle, Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger, DiscordIcon, Donut, DonutLegend, DotRow, DownloadCsvButton, EligibilityChip, ExternalLink, FreshnessBadge, FreshnessIndicator, HealthDot, HealthPill, HoverCard, HoverCardContent, HoverCardTrigger, HoverPreview, InfoTooltip, Kbd, KeyChip, ListCard, ListShell, LoadMore, McpToolsList, MethodologyCallout, MiniRadial, MiniStack, NoDataSpark, PageHero, PageSection, Popover, PopoverAnchor, PopoverContent, PopoverTrigger, PrimaryLinksRail, ProfileHero, RealtimeFreshness, ReviewChip, SCOPES, ScrollReveal, SearchScopeChip, SectionAnchor, SectionHeading, ShareButton, Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetOverlay, SheetPortal, SheetTitle, SheetTrigger, Skeleton, SparkLegend, Sparkline, StatTile, StatWithSpark, TableState, TimeAgo, Toaster, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, TreemapMini, ViewModeToggle, Wordmark, YieldPercentileStrip, buildCsvDownloadUrl, cn, fmtYield, freshnessBadgeTimeCopy, freshnessDotClass, freshnessTierLabel, prefetchBrandIcon, safeExternalUrl, tierFreshnessLabel, timeAgoAbsoluteTitle, visibleTools };
+export { AccentBand, Accordion, AccordionContent, AccordionItem, AccordionTrigger, AnimatedNumber, BackToTop, BarMini, BrandIcon, CandidateChip, Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut, CopyButton, CopyIconToggle, CopyableCode, CurationChip, DailyRollupFreshness, DensityToggle, Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger, DiscordIcon, Donut, DonutLegend, DotRow, DownloadCsvButton, EligibilityChip, EntityHero, ExternalLink, FreshnessBadge, FreshnessIndicator, HealthDot, HealthPill, HoverCard, HoverCardContent, HoverCardTrigger, HoverPreview, InfoTooltip, Kbd, KeyChip, ListCard, ListShell, LoadMore, McpToolsList, MethodologyCallout, MiniRadial, MiniStack, NoDataSpark, PageHero, PageSection, Popover, PopoverAnchor, PopoverContent, PopoverTrigger, PrimaryLinksRail, RealtimeFreshness, ReviewChip, SCOPES, ScrollReveal, SearchScopeChip, SectionAnchor, SectionHeading, ShareButton, Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetOverlay, SheetPortal, SheetTitle, SheetTrigger, Skeleton, SparkLegend, Sparkline, StatTile, StatWithSpark, TableState, TimeAgo, Toaster, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, TreemapMini, ViewModeToggle, Wordmark, YieldPercentileStrip, buildCsvDownloadUrl, cn, fmtYield, freshnessBadgeTimeCopy, freshnessDotClass, freshnessTierLabel, prefetchBrandIcon, safeExternalUrl, tierFreshnessLabel, timeAgoAbsoluteTitle, visibleTools };

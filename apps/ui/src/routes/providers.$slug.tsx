@@ -11,7 +11,7 @@ import {
 } from "@/components/metagraphed/states";
 import { QueryErrorBoundary } from "@/components/metagraphed/error-boundary";
 import {
-  ProfileHero,
+  EntityHero,
   BrandIcon,
   PrimaryLinksRail,
   CopyableCode,
@@ -107,7 +107,7 @@ function ProviderShell({ slug }: { slug: string }) {
 
   return (
     <>
-      <ProfileHero
+      <EntityHero
         icon={
           <BrandIcon
             url={p?.website ?? p?.homepage}
