@@ -6,9 +6,10 @@ import {
   specifiedRules,
   validate,
 } from "graphql";
+import { SS58_ADDRESS_PATTERN } from "../workers/config.mjs";
+import { tryPostgresTier } from "../workers/postgres-tier.mjs";
 import { readArtifact, readHealthKv } from "../workers/storage.mjs";
 import { contractVersion } from "../workers/responses.mjs";
-import { tryPostgresTier } from "../workers/postgres-tier.mjs";
 import {
   buildSubnetRegistrations,
   SUBNET_REGISTRATIONS_WINDOWS,
@@ -135,8 +136,8 @@ import {
   DEFAULT_ACCOUNT_STAKE_MOVES_WINDOW,
 } from "./account-stake-moves.mjs";
 import { loadAccountIdentityHistory } from "./account-identity-history.mjs";
+import { loadAccountIdentity } from "./account-identity.mjs";
 import { KV_HEALTH_META } from "./kv-keys.mjs";
-import { SS58_ADDRESS_PATTERN } from "../workers/config.mjs";
 import {
   parseHistoryWindow,
   unsupportedWindowMessage,
@@ -228,6 +229,8 @@ export const SDL = `
     health: GlobalHealth
     "Cross-subnet economic opportunity boards (where to register, what it costs, where the emission and validator headroom are)."
     opportunity_boards(limit: Int): OpportunityBoards!
+    "Latest-only personal on-chain identity for one account. Mirrors GET /api/v1/accounts/{ss58}/identity."
+    account_identity(ss58: String!): AccountIdentity!
     "Cross-subnet comparison: registry structure, live economics, and live health placed side by side for the requested netuids, in requested order. Mirrors GET /api/v1/compare."
     compare(netuids: [Int!]!, dimensions: [String!]): Compare!
     "Global endpoint-incident ledger over a 7d/30d window; degrades to a schema-stable empty ledger (never a GraphQL error) on a cold/retired health tier. Mirrors GET /api/v1/incidents."
@@ -711,6 +714,20 @@ export const SDL = `
     miner_count: Int
     validator_headroom: Int
     max_validators: Int
+  }
+
+  type AccountIdentity {
+    schema_version: Int!
+    account: String!
+    has_identity: Boolean!
+    name: String
+    url: String
+    github: String
+    image: String
+    discord: String
+    description: String
+    additional: String
+    captured_at: String
   }
 
   type Compare {
@@ -1615,6 +1632,7 @@ export const FIELD_COMPLEXITY = {
   endpoints: RELATIONSHIP_FIELD_COMPLEXITY,
   health: RELATIONSHIP_FIELD_COMPLEXITY,
   opportunity_boards: RELATIONSHIP_FIELD_COMPLEXITY,
+  account_identity: RELATIONSHIP_FIELD_COMPLEXITY,
   compare: RELATIONSHIP_FIELD_COMPLEXITY,
   extrinsics: RELATIONSHIP_FIELD_COMPLEXITY,
   extrinsic: RELATIONSHIP_FIELD_COMPLEXITY,
@@ -1965,6 +1983,14 @@ function loadObservedAt(context) {
     const meta = await readHealthKv(context.env, KV_HEALTH_META);
     return meta?.last_run_at || null;
   });
+}
+
+// Synthetic GET /api/v1/accounts/{ss58}/identity request, forwarded unchanged
+// to DATA_API via tryPostgresTier when the account-identity cutover is active.
+function graphqlAccountIdentityRequest(ss58) {
+  return new Request(
+    `https://d/api/v1/accounts/${encodeURIComponent(ss58)}/identity`,
+  );
 }
 
 // Economics subnet rows for compare, reusing the live-preferring economics memo
@@ -2628,6 +2654,22 @@ const rootValue = {
       highest_emission: boards["highest-emission"] || [],
       validator_headroom: boards["validator-headroom"] || [],
     };
+  },
+
+  async account_identity({ ss58 }, context) {
+    if (typeof ss58 !== "string" || !SS58_ADDRESS_PATTERN.test(ss58)) {
+      throw new GraphQLError(
+        "ss58 must be a valid SS58 account address (base58, 47-48 chars).",
+        { extensions: { code: "BAD_USER_INPUT" } },
+      );
+    }
+    return (
+      (await tryPostgresTier(
+        context.env,
+        graphqlAccountIdentityRequest(ss58),
+        "METAGRAPH_ACCOUNT_IDENTITY_SOURCE",
+      )) ?? (await loadAccountIdentity(graphqlD1(context), ss58))
+    );
   },
 
   async compare({ netuids, dimensions }, context) {

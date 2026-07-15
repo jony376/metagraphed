@@ -32,6 +32,7 @@ import {
 
 // Minimal fake env — no R2 or ASSETS, so readArtifact always returns ok:false.
 const emptyEnv = {};
+const SS58 = "5G9hfkx9wGB1CLMT9WXkpHSAiYzjZb5o1Boyq4KAdDhjwrc5";
 
 async function gql(query, env = emptyEnv, extras = {}) {
   const req = new Request("https://api.metagraph.sh/api/v1/graphql", {
@@ -75,6 +76,28 @@ function fixtureEnv(fixtures = {}, { reads, kv, kvReads } = {}) {
     };
   }
   return env;
+}
+
+function accountIdentityEnv({ identity } = {}, capture = []) {
+  return {
+    METAGRAPH_HEALTH_DB: {
+      prepare(sql) {
+        return {
+          bind(...params) {
+            capture.push({ sql, params });
+            return {
+              all() {
+                if (/FROM account_identity WHERE/.test(sql)) {
+                  return Promise.resolve({ results: identity || [] });
+                }
+                return Promise.resolve({ results: [] });
+              },
+            };
+          },
+        };
+      },
+    },
+  };
 }
 
 describe("handleGraphQLRequest — method guard", () => {
@@ -1322,6 +1345,7 @@ describe("graphql — complexity weights keep the guard meaningful", () => {
       "endpoints",
       "health",
       "opportunity_boards",
+      "account_identity",
     ]) {
       assert.equal(FIELD_COMPLEXITY[field], 5, `${field} should be weighted`);
     }
@@ -1377,6 +1401,95 @@ describe("graphql — complexity weights keep the guard meaningful", () => {
 // --- Branch coverage for the changed resolvers/handler ----------------------
 
 describe("graphql — resolver branch coverage", () => {
+  test("account_identity returns the latest identity from D1", async () => {
+    const env = accountIdentityEnv({
+      identity: [
+        {
+          account: SS58,
+          name: "Alice",
+          url: "https://alice.example",
+          github: "https://github.com/alice",
+          image: null,
+          discord: "alice#0001",
+          description: "validator",
+          additional: null,
+          captured_at: 1_700_000_000_000,
+        },
+      ],
+    });
+    const { status, body } = await gql(
+      `{ account_identity(ss58: "${SS58}") {
+          account has_identity name url github captured_at
+        } }`,
+      env,
+    );
+    assert.equal(status, 200);
+    assert.equal(body.data.account_identity.account, SS58);
+    assert.equal(body.data.account_identity.has_identity, true);
+    assert.equal(body.data.account_identity.name, "Alice");
+    assert.equal(body.data.account_identity.url, "https://alice.example/");
+    assert.equal(body.data.account_identity.github, "https://github.com/alice");
+    assert.ok(body.data.account_identity.captured_at);
+  });
+
+  test("account_identity returns a schema-stable empty identity on cold D1", async () => {
+    const { status, body } = await gql(
+      `{ account_identity(ss58: "${SS58}") {
+          account has_identity name captured_at
+        } }`,
+      accountIdentityEnv(),
+    );
+    assert.equal(status, 200);
+    assert.equal(body.data.account_identity.account, SS58);
+    assert.equal(body.data.account_identity.has_identity, false);
+    assert.equal(body.data.account_identity.name, null);
+    assert.equal(body.data.account_identity.captured_at, null);
+  });
+
+  test("account_identity rejects an invalid ss58 with BAD_USER_INPUT", async () => {
+    const { status, body } = await gql(
+      '{ account_identity(ss58: "not-ss58") { account } }',
+    );
+    assert.equal(status, 200);
+    assert.ok(body.errors.find((e) => e.extensions?.code === "BAD_USER_INPUT"));
+  });
+
+  test("account_identity uses the Postgres tier when enabled", async () => {
+    const capture = [];
+    const env = {
+      ...accountIdentityEnv(
+        {
+          identity: [{ account: SS58, name: "D1Alice", captured_at: 1 }],
+        },
+        capture,
+      ),
+      METAGRAPH_ACCOUNT_IDENTITY_SOURCE: "postgres",
+      DATA_API: {
+        fetch: async () =>
+          Response.json({
+            schema_version: 1,
+            account: SS58,
+            has_identity: true,
+            name: "PgAlice",
+            url: null,
+            github: null,
+            image: null,
+            discord: null,
+            description: null,
+            additional: null,
+            captured_at: null,
+          }),
+      },
+    };
+    const { status, body } = await gql(
+      `{ account_identity(ss58: "${SS58}") { account has_identity name } }`,
+      env,
+    );
+    assert.equal(status, 200);
+    assert.equal(body.data.account_identity.name, "PgAlice");
+    assert.deepEqual(capture, []);
+  });
+
   test("a spread to an undefined fragment is handled by the depth/complexity guards", async () => {
     // frag is undefined, so the rules skip the spread instead of throwing.
     const { status } = await gql("{ ...Ghost }");
