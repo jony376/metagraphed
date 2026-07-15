@@ -60,6 +60,8 @@ import {
   clampOffset,
 } from "../workers/request-params.mjs";
 import { loadSubnetIdentityHistory } from "./subnet-identity-history.mjs";
+import { buildSubnetHyperparams } from "./subnet-hyperparams.mjs";
+import { buildSubnetHyperparamsHistory } from "./subnet-hyperparams-history.mjs";
 import {
   buildGlobalHealth,
   formatLeaderboards,
@@ -232,6 +234,10 @@ export const SDL = `
     subnet_yield(netuid: Int!): SubnetYield!
     "Per-subnet reward-distribution and score-spread card over the current neurons snapshot: incentive/dividends concentration plus p10–p90 trust/consensus/validator_trust; a subnet with no neurons resolves to a schema-stable zeroed card (metric blocks null), never null. Mirrors GET /api/v1/subnets/{netuid}/performance."
     subnet_performance(netuid: Int!): SubnetPerformance!
+    "One subnet's current hyperparameters snapshot; hyperparameters is null when the subnet has never been captured, never a GraphQL error. Mirrors GET /api/v1/subnets/{netuid}/hyperparameters."
+    subnet_hyperparameters(netuid: Int!): SubnetHyperparameters!
+    "Append-only hyperparameter-change timeline for one subnet, newest first; page with limit/offset or follow next_cursor. A subnet with no history resolves to a schema-stable empty timeline (entry_count 0), never null. Mirrors GET /api/v1/subnets/{netuid}/hyperparameters/history."
+    subnet_hyperparameters_history(netuid: Int!, limit: Int, offset: Int, cursor: String): SubnetHyperparametersHistory!
     "Append-only on-chain SubnetIdentitiesV3 change timeline for one subnet (name, symbol, description, repo, website, discord, logo), newest first; page with limit/offset or follow next_cursor. A subnet with no matching events resolves to a schema-stable empty timeline (entry_count 0), never null. Mirrors GET /api/v1/subnets/{netuid}/identity-history."
     subnet_identity_history(netuid: Int!, limit: Int, offset: Int, cursor: String): SubnetIdentityHistory!
     "Paginated provider/source registry."
@@ -1134,6 +1140,71 @@ export const SDL = `
     validator_trust: ScoreDistribution
   }
 
+  "One subnet's current hyperparameters snapshot (#5690). hyperparameters is null on a cold/empty store. Mirrors GET /api/v1/subnets/{netuid}/hyperparameters."
+  type SubnetHyperparameters {
+    schema_version: Int!
+    netuid: Int!
+    captured_at: String
+    block_number: Int
+    hyperparameters: SubnetHyperparameterValues
+  }
+
+  "The current 33-field subnet hyperparameter set. Mirrors the REST + MCP hyperparameters object."
+  type SubnetHyperparameterValues {
+    kappa_ratio: Float
+    immunity_period: Int
+    min_allowed_weights: Int
+    max_weight_limit_ratio: Float
+    tempo: Int
+    weights_version: Int
+    weights_rate_limit: Int
+    activity_cutoff: Int
+    activity_cutoff_factor: Int
+    registration_allowed: Boolean
+    target_regs_per_interval: Int
+    min_burn_tao: Float
+    max_burn_tao: Float
+    burn_half_life: Int
+    burn_increase_mult: Float
+    bonds_moving_avg_raw: Int
+    max_regs_per_block: Int
+    serving_rate_limit: Int
+    max_validators: Int
+    commit_reveal_period: Int
+    commit_reveal_enabled: Boolean
+    alpha_high_ratio: Float
+    alpha_low_ratio: Float
+    liquid_alpha_enabled: Boolean
+    alpha_sigmoid_steepness: Float
+    yuma_version: Int
+    subnet_is_active: Boolean
+    transfers_enabled: Boolean
+    bonds_reset_enabled: Boolean
+    user_liquidity_enabled: Boolean
+    owner_cut_enabled: Boolean
+    owner_cut_auto_lock_enabled: Boolean
+    min_childkey_take_ratio: Float
+  }
+
+  "Append-only per-subnet hyperparameter-change timeline (#5690). Mirrors GET /api/v1/subnets/{netuid}/hyperparameters/history."
+  type SubnetHyperparametersHistory {
+    schema_version: Int!
+    netuid: Int!
+    entry_count: Int!
+    limit: Int
+    offset: Int
+    next_cursor: String
+    entries: [SubnetHyperparametersHistoryEntry!]!
+  }
+
+  "One historical hyperparameter snapshot with its stable content hash."
+  type SubnetHyperparametersHistoryEntry {
+    block_number: Int
+    observed_at: String
+    hyperparameters: SubnetHyperparameterValues
+    hyperparams_hash: String
+  }
+
   "Global endpoint-incident ledger (#5660). Mirrors GET /api/v1/incidents' data envelope."
   type GlobalIncidents {
     schema_version: Int!
@@ -1865,6 +1936,8 @@ export const FIELD_COMPLEXITY = {
   subnet_weight_setters: RELATIONSHIP_FIELD_COMPLEXITY,
   subnet_yield: RELATIONSHIP_FIELD_COMPLEXITY,
   subnet_performance: RELATIONSHIP_FIELD_COMPLEXITY,
+  subnet_hyperparameters: RELATIONSHIP_FIELD_COMPLEXITY,
+  subnet_hyperparameters_history: RELATIONSHIP_FIELD_COMPLEXITY,
   subnet_identity_history: RELATIONSHIP_FIELD_COMPLEXITY,
   incidents: RELATIONSHIP_FIELD_COMPLEXITY,
   blocks_summary: RELATIONSHIP_FIELD_COMPLEXITY,
@@ -2643,6 +2716,72 @@ const rootValue = {
       offset: data.offset ?? safeOffset,
       next_cursor: data.next_cursor ?? null,
       entries: data.entries || [],
+    };
+  },
+
+  async subnet_hyperparameters({ netuid }, context) {
+    if (!Number.isInteger(netuid) || netuid < 0) {
+      throw new GraphQLError("netuid must be a non-negative integer.", {
+        extensions: { code: "BAD_USER_INPUT" },
+      });
+    }
+    const data =
+      (await tryPostgresTier(
+        context.env,
+        postgresTierRequest(
+          context,
+          `/api/v1/subnets/${netuid}/hyperparameters`,
+          new URLSearchParams(),
+        ),
+        "METAGRAPH_SUBNET_HYPERPARAMS_SOURCE",
+      )) ?? buildSubnetHyperparams(null, netuid);
+    return {
+      schema_version: data.schema_version ?? 1,
+      netuid: data.netuid ?? netuid,
+      captured_at: data.captured_at ?? null,
+      block_number: data.block_number ?? null,
+      hyperparameters: data.hyperparameters ?? null,
+    };
+  },
+
+  async subnet_hyperparameters_history(
+    { netuid, limit, offset, cursor },
+    context,
+  ) {
+    if (!Number.isInteger(netuid) || netuid < 0) {
+      throw new GraphQLError("netuid must be a non-negative integer.", {
+        extensions: { code: "BAD_USER_INPUT" },
+      });
+    }
+    const safeLimit = clampLimit(limit, FEED_PAGINATION);
+    const safeOffset = clampOffset(offset);
+    const params = new URLSearchParams();
+    params.set("limit", String(safeLimit));
+    params.set("offset", String(safeOffset));
+    if (cursor) params.set("cursor", cursor);
+    const data =
+      (await tryPostgresTier(
+        context.env,
+        postgresTierRequest(
+          context,
+          `/api/v1/subnets/${netuid}/hyperparameters/history`,
+          params,
+        ),
+        "METAGRAPH_SUBNET_HYPERPARAMS_SOURCE",
+      )) ??
+      buildSubnetHyperparamsHistory([], netuid, {
+        limit: safeLimit,
+        offset: safeOffset,
+        nextCursor: null,
+      });
+    return {
+      schema_version: data.schema_version ?? 1,
+      netuid: data.netuid ?? netuid,
+      entry_count: data.entry_count ?? 0,
+      limit: data.limit ?? safeLimit,
+      offset: data.offset ?? safeOffset,
+      next_cursor: data.next_cursor ?? null,
+      entries: data.entries ?? [],
     };
   },
 

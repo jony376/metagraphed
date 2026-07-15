@@ -2750,6 +2750,235 @@ describe("graphql — subnet_identity_history (#5721, Postgres-tier + empty time
   });
 });
 
+describe("graphql — subnet_hyperparameters / subnet_hyperparameters_history (#5690)", () => {
+  function dataApi(response) {
+    return { fetch: async () => response };
+  }
+
+  test("subnet_hyperparameters cold store returns a schema-stable null snapshot, never null", async () => {
+    const { status, body } = await gql(
+      `{ subnet_hyperparameters(netuid: 1) {
+          schema_version netuid captured_at block_number
+          hyperparameters { tempo registration_allowed }
+        } }`,
+    );
+    assert.equal(status, 200);
+    assert.equal(body.errors, undefined);
+    assert.deepEqual(body.data.subnet_hyperparameters, {
+      schema_version: 1,
+      netuid: 1,
+      captured_at: null,
+      block_number: null,
+      hyperparameters: null,
+    });
+  });
+
+  test("subnet_hyperparameters resolves the Postgres-tier snapshot", async () => {
+    const env = {
+      METAGRAPH_SUBNET_HYPERPARAMS_SOURCE: "postgres",
+      DATA_API: dataApi(
+        Response.json({
+          schema_version: 1,
+          netuid: 7,
+          captured_at: "2026-07-01T00:00:00.000Z",
+          block_number: 4200,
+          hyperparameters: {
+            tempo: 360,
+            registration_allowed: true,
+            max_validators: 64,
+            alpha_high_ratio: 0.8,
+          },
+        }),
+      ),
+    };
+    const { status, body } = await gql(
+      `{ subnet_hyperparameters(netuid: 7) {
+          netuid captured_at block_number
+          hyperparameters {
+            tempo registration_allowed max_validators alpha_high_ratio
+          }
+        } }`,
+      env,
+    );
+    assert.equal(status, 200);
+    assert.equal(body.errors, undefined);
+    assert.deepEqual(body.data.subnet_hyperparameters, {
+      netuid: 7,
+      captured_at: "2026-07-01T00:00:00.000Z",
+      block_number: 4200,
+      hyperparameters: {
+        tempo: 360,
+        registration_allowed: true,
+        max_validators: 64,
+        alpha_high_ratio: 0.8,
+      },
+    });
+  });
+
+  test("subnet_hyperparameters partial Postgres body degrades to resolver defaults", async () => {
+    const env = {
+      METAGRAPH_SUBNET_HYPERPARAMS_SOURCE: "postgres",
+      DATA_API: dataApi(Response.json({})),
+    };
+    const { status, body } = await gql(
+      `{ subnet_hyperparameters(netuid: 9) {
+          schema_version netuid captured_at block_number hyperparameters { tempo }
+        } }`,
+      env,
+    );
+    assert.equal(status, 200);
+    assert.deepEqual(body.data.subnet_hyperparameters, {
+      schema_version: 1,
+      netuid: 9,
+      captured_at: null,
+      block_number: null,
+      hyperparameters: null,
+    });
+  });
+
+  test("subnet_hyperparameters_history cold store returns a schema-stable empty timeline", async () => {
+    const { status, body } = await gql(
+      `{ subnet_hyperparameters_history(netuid: 1) {
+          schema_version netuid entry_count limit offset next_cursor
+          entries { block_number hyperparams_hash }
+        } }`,
+    );
+    assert.equal(status, 200);
+    assert.equal(body.errors, undefined);
+    assert.deepEqual(body.data.subnet_hyperparameters_history, {
+      schema_version: 1,
+      netuid: 1,
+      entry_count: 0,
+      limit: 100,
+      offset: 0,
+      next_cursor: null,
+      entries: [],
+    });
+  });
+
+  test("subnet_hyperparameters_history resolves the Postgres-tier timeline", async () => {
+    const env = {
+      METAGRAPH_SUBNET_HYPERPARAMS_SOURCE: "postgres",
+      DATA_API: dataApi(
+        Response.json({
+          schema_version: 1,
+          netuid: 5,
+          entry_count: 1,
+          limit: 50,
+          offset: 0,
+          next_cursor: null,
+          entries: [
+            {
+              block_number: 999,
+              observed_at: "2026-07-02T00:00:00.000Z",
+              hyperparams_hash: "abc123",
+              hyperparameters: {
+                tempo: 120,
+                registration_allowed: false,
+                max_validators: 32,
+              },
+            },
+          ],
+        }),
+      ),
+    };
+    const { status, body } = await gql(
+      `{ subnet_hyperparameters_history(netuid: 5, limit: 50) {
+          netuid entry_count limit
+          entries {
+            block_number observed_at hyperparams_hash
+            hyperparameters { tempo registration_allowed max_validators }
+          }
+        } }`,
+      env,
+    );
+    assert.equal(status, 200);
+    assert.equal(body.errors, undefined);
+    assert.deepEqual(body.data.subnet_hyperparameters_history, {
+      netuid: 5,
+      entry_count: 1,
+      limit: 50,
+      entries: [
+        {
+          block_number: 999,
+          observed_at: "2026-07-02T00:00:00.000Z",
+          hyperparams_hash: "abc123",
+          hyperparameters: {
+            tempo: 120,
+            registration_allowed: false,
+            max_validators: 32,
+          },
+        },
+      ],
+    });
+  });
+
+  test("subnet_hyperparameters_history pagination args are forwarded to the Postgres tier", async () => {
+    let capturedUrl;
+    const env = {
+      METAGRAPH_SUBNET_HYPERPARAMS_SOURCE: "postgres",
+      DATA_API: {
+        fetch: async (req) => {
+          capturedUrl = new URL(req.url);
+          return Response.json({});
+        },
+      },
+    };
+    await gql(
+      '{ subnet_hyperparameters_history(netuid: 3, limit: 25, offset: 10, cursor: "abc") { entry_count } }',
+      env,
+    );
+    assert.equal(capturedUrl.searchParams.get("limit"), "25");
+    assert.equal(capturedUrl.searchParams.get("offset"), "10");
+    assert.equal(capturedUrl.searchParams.get("cursor"), "abc");
+    assert.ok(
+      capturedUrl.pathname.endsWith("/subnets/3/hyperparameters/history"),
+    );
+  });
+
+  test("subnet_hyperparameters_history partial Postgres body degrades to resolver defaults", async () => {
+    const env = {
+      METAGRAPH_SUBNET_HYPERPARAMS_SOURCE: "postgres",
+      DATA_API: dataApi(Response.json({})),
+    };
+    const { status, body } = await gql(
+      `{ subnet_hyperparameters_history(netuid: 9) {
+          schema_version netuid entry_count limit offset next_cursor
+          entries { block_number }
+        } }`,
+      env,
+    );
+    assert.equal(status, 200);
+    assert.deepEqual(body.data.subnet_hyperparameters_history, {
+      schema_version: 1,
+      netuid: 9,
+      entry_count: 0,
+      limit: 100,
+      offset: 0,
+      next_cursor: null,
+      entries: [],
+    });
+  });
+
+  test("a negative netuid is a GraphQL error for both hyperparameter fields", async () => {
+    const { body } = await gql(
+      `{
+        snapshot: subnet_hyperparameters(netuid: -1) { netuid }
+        history: subnet_hyperparameters_history(netuid: -1) { entry_count }
+      }`,
+    );
+    assert.ok(body.errors, "expected GraphQL errors");
+    assert.ok(body.errors.every((error) => /netuid/i.test(error.message)));
+    assert.equal(body.data?.snapshot ?? null, null);
+    assert.equal(body.data?.history ?? null, null);
+  });
+
+  test("subnet_hyperparameters / subnet_hyperparameters_history are weighted as fan-out fields", () => {
+    assert.equal(FIELD_COMPLEXITY.subnet_hyperparameters, 5);
+    assert.equal(FIELD_COMPLEXITY.subnet_hyperparameters_history, 5);
+  });
+});
+
 describe("graphql — accounts / account (#5574, Postgres-tier accounts leaderboard)", () => {
   const SS58 = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
 
