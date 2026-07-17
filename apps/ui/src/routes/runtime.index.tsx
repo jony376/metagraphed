@@ -13,6 +13,10 @@ import {
   TimeAgo,
 } from "@jsonbored/ui-kit";
 import { QueryErrorBoundary } from "@/components/metagraphed/error-boundary";
+import {
+  RuntimeUpgradeCardList,
+  orderRuntimeUpgradesNewestFirst,
+} from "@/components/metagraphed/runtime-upgrade-card-list";
 import { runtimeVersionHistoryQuery } from "@/lib/metagraphed/queries";
 import { buildUrl } from "@/lib/metagraphed/client";
 import { formatNumber } from "@/lib/metagraphed/format";
@@ -70,9 +74,7 @@ function RuntimePage() {
 function RuntimeContent() {
   const { data: res } = useSuspenseQuery(runtimeVersionHistoryQuery());
   const history = res.data;
-  // Backend orders transitions ascending by block_number (earliest first);
-  // display newest first, matching every other timeline view on this site.
-  const rows = [...history.transitions].reverse();
+  const rows = orderRuntimeUpgradesNewestFirst(history.transitions);
 
   return (
     <>
@@ -85,53 +87,56 @@ function RuntimeContent() {
           generatedAt={history.coverage_from_at ?? undefined}
         />
       ) : (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface/50 text-[10px] font-mono uppercase tracking-widest text-ink-muted">
-                <tr>
-                  <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-widest">
-                    Spec Version
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-widest">
-                    Block
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-widest">
-                    Observed
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr
-                    key={`${row.spec_version}-${row.block_number}`}
-                    className="mg-row-hover border-t border-border/60"
-                  >
-                    <td className="px-3 py-2.5 font-mono text-[12px] tabular-nums text-ink-strong">
-                      {formatNumber(row.spec_version)}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-[12px] tabular-nums">
-                      {row.block_number != null ? (
-                        <Link
-                          to="/blocks/$ref"
-                          params={{ ref: String(row.block_number) }}
-                          className="text-ink hover:underline"
-                        >
-                          #{formatNumber(row.block_number)}
-                        </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-[12px] text-ink-muted">
-                      {row.observed_at ? <TimeAgo at={row.observed_at} /> : "—"}
-                    </td>
+        <>
+          <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface/50 text-[10px] font-mono uppercase tracking-widest text-ink-muted">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-widest">
+                      Spec Version
+                    </th>
+                    <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-widest">
+                      Block
+                    </th>
+                    <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-widest">
+                      Observed
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr
+                      key={`${row.spec_version}-${row.block_number}`}
+                      className="mg-row-hover border-t border-border/60"
+                    >
+                      <td className="px-3 py-2.5 font-mono text-[12px] tabular-nums text-ink-strong">
+                        {formatNumber(row.spec_version)}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-[12px] tabular-nums">
+                        {row.block_number != null ? (
+                          <Link
+                            to="/blocks/$ref"
+                            params={{ ref: String(row.block_number) }}
+                            className="text-ink hover:underline"
+                          >
+                            #{formatNumber(row.block_number)}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-[12px] text-ink-muted">
+                        {row.observed_at ? <TimeAgo at={row.observed_at} /> : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+          <RuntimeUpgradeCardList rows={rows} className="grid gap-3 sm:grid-cols-2 md:hidden" />
+        </>
       )}
     </>
   );
