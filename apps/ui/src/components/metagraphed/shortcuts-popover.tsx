@@ -109,6 +109,19 @@ export function ShortcutsPopover() {
             </Row>
           ))}
         </ul>
+        {/* #6560: blocks.$ref.tsx's own keydown handler walks to the prev/next
+            block on ArrowLeft/ArrowRight -- page-scoped, unlike every other
+            shortcut above, so it gets its own labeled section instead of
+            reading as a global binding. */}
+        <div className="font-mono text-[10px] uppercase tracking-widest text-ink-muted mt-4 mb-2">
+          On block pages
+        </div>
+        <ul className="space-y-1.5 text-[12px]">
+          <Row label="Previous / next block">
+            <Kbd>←</Kbd>
+            <Kbd>→</Kbd>
+          </Row>
+        </ul>
       </PopoverContent>
     </Popover>
   );
