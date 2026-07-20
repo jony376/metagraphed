@@ -26,51 +26,29 @@
 // split every other chain-reading box job already uses).
 //
 // Usage: node scripts/reconcile-neurons.mjs
-import postgres from "postgres";
+import path from "node:path";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import postgres from "postgres";
 import { stableStringify } from "./lib.mjs";
 import { initSentry, endSessionAndFlush } from "./observability.mjs";
+import {
+  ABSOLUTE_FLOOR_TAO,
+  ALERT_THRESHOLD_RATIO,
+  RELATIVE_TOLERANCE,
+  exceedsAlertThreshold,
+  fieldsDiffer,
+} from "./lib/reconcile-neurons-tolerance.mjs";
 
-initSentry("reconcile-neurons");
+export {
+  ABSOLUTE_FLOOR_TAO,
+  ALERT_THRESHOLD_RATIO,
+  RELATIVE_TOLERANCE,
+  exceedsAlertThreshold,
+  fieldsDiffer,
+} from "./lib/reconcile-neurons-tolerance.mjs";
 
-// Below this absolute TAO delta, a mismatch is never flagged regardless of
-// relative size -- avoids false positives on near-zero stakes where a tiny
-// absolute change looks like a huge percentage. Above it, tolerate up to 2%
-// relative drift before flagging a single row: ordinary staking/unstaking
-// activity between refresh-metagraph's last write and this reconciler's own
-// fetch produces real, benign per-row differences at this scale.
-const ABSOLUTE_FLOOR_TAO = 0.01;
-const RELATIVE_TOLERANCE = 0.02;
-// RATIO, not a fixed count: refresh-metagraph runs DAILY (not hourly --
-// corrected after live testing against the real box, 2026-07-15), so
-// Postgres can legitimately be up to ~24h stale depending on where in the
-// cycle this job runs relative to it. A fixed small count would alert on
-// every single run purely from that lag (confirmed live: 15% of all rows
-// individually exceeded per-row tolerance after ~7h of staleness, entirely
-// explained by ordinary network-wide staking activity, not a bug). A ratio
-// scales with however stale Postgres happens to be and stays meaningful
-// regardless of network size. 30% is deliberately conservative pending real
-// drift history to tune against -- scheduled to run shortly after
-// refresh-metagraph's own daily fire (roles/data-refresh-node's job vars)
-// specifically to keep legitimate lag-driven drift low, so a genuine
-// systemic break (stalled sync, decode bug) should clear this threshold by
-// a wide margin rather than needing to be tuned razor-close to it.
-const ALERT_THRESHOLD_RATIO = 0.3;
 const MAX_EXAMPLES_IN_ALERT = 10;
-
-function fieldsDiffer(liveValue, storedValue) {
-  const live = Number(liveValue);
-  const stored = storedValue === null ? null : Number(storedValue);
-  if (!Number.isFinite(live)) return false; // fetch didn't produce a value for this field -- not this reconciler's problem
-  if (stored === null || !Number.isFinite(stored)) return true; // Postgres has no comparable value at all
-  const delta = Math.abs(live - stored);
-  if (delta <= ABSOLUTE_FLOOR_TAO) return false;
-  const tolerance = Math.max(
-    ABSOLUTE_FLOOR_TAO,
-    RELATIVE_TOLERANCE * Math.abs(live),
-  );
-  return delta > tolerance;
-}
 
 async function main() {
   const snapshotPath = process.env.LIVE_SNAPSHOT_JSON;
@@ -141,7 +119,7 @@ async function main() {
   };
   console.log(stableStringify(summary));
 
-  if (mismatchRatio >= ALERT_THRESHOLD_RATIO) {
+  if (exceedsAlertThreshold(mismatchRatio)) {
     await sendAlert(summary, mismatches.slice(0, MAX_EXAMPLES_IN_ALERT));
   }
 }
@@ -173,5 +151,12 @@ async function sendAlert(summary, examples) {
   }
 }
 
-await main();
-await endSessionAndFlush();
+// Run as a CLI only when invoked directly (not when imported by a test).
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  initSentry("reconcile-neurons");
+  await main();
+  await endSessionAndFlush();
+}
