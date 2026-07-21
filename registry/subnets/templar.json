@@ -151,7 +151,13 @@
       "id": "sn-3-templar-health",
       "kind": "subnet-api",
       "name": "Templar Grafana health",
-      "notes": "Public no-auth GET /api/health on grafana.tplr.ai returning application liveness JSON. Served on the Templar Grafana host registered as a dashboard surface and linked from the Templar source repository README.",
+      "notes": "Public no-auth GET /api/health on grafana.tplr.ai returning application liveness JSON. Served on the Templar Grafana host registered as a dashboard surface and linked from the Templar source repository README. Live-verified 2026-07-21: HTTP 200 application/json body {\"database\":\"ok\"}.",
+      "probe": {
+        "enabled": true,
+        "expect": "json",
+        "method": "GET",
+        "timeout_ms": 10000
+      },
       "provider": "one-covenant",
       "public_safe": true,
       "review": {
@@ -170,7 +176,7 @@
       "id": "sn-3-templar-grafana-openapi",
       "kind": "openapi",
       "name": "Templar Grafana HTTP API OpenAPI",
-      "notes": "Public no-auth OpenAPI 3.0.3 schema (title \"Grafana HTTP API.\", 208 paths) on grafana.tplr.ai/public/openapi3.json. Served on the Templar Grafana host registered as a dashboard surface and linked from the Templar source repository README; the built-in Swagger UI at grafana.tplr.ai/swagger loads this spec alongside the legacy v2 merge at public/api-merged.json.",
+      "notes": "Public no-auth OpenAPI 3.0.3 schema (title \"Grafana HTTP API.\", 208 paths) on grafana.tplr.ai/public/openapi3.json. Served on the Templar Grafana host registered as a dashboard surface and linked from the Templar source repository README; the built-in Swagger UI at grafana.tplr.ai/swagger loads this spec alongside the legacy v2 merge at public/api-merged.json. Live-verified 2026-07-21: HTTP 200 application/json OpenAPI 3.0.3, title \"Grafana HTTP API.\", 208 paths (~728 KB).",
       "probe": {
         "enabled": true,
         "expect": "json",
