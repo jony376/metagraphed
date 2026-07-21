@@ -91,7 +91,13 @@
       "id": "sn-79-taos-im-subnet-api",
       "kind": "subnet-api",
       "name": "MVTRX exchange health API",
-      "notes": "Public no-auth GET /health on mvtrx.exchange returning JSON liveness for the TAOS IM trading host (observed: {\"status\":\"ok\",\"mode\":\"host\",\"network\":\"mainnet\"}). The official SN79 README links mvtrx.exchange as the project exchange.",
+      "notes": "Public no-auth GET /health on mvtrx.exchange returning JSON liveness for the TAOS IM trading host (observed: {\"status\":\"ok\",\"mode\":\"host\",\"network\":\"mainnet\"}). The official SN79 README links mvtrx.exchange as the project exchange. Live-verified 2026-07-21: GET returned HTTP 200 application/json with that body; HEAD returned HTTP 405, so probe.method must stay GET.",
+      "probe": {
+        "enabled": true,
+        "expect": "json",
+        "method": "GET",
+        "timeout_ms": 10000
+      },
       "provider": "taos-im",
       "public_safe": true,
       "review": {
